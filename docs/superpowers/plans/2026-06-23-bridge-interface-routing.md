@@ -235,8 +235,10 @@ mod tests {
         let bridge = BridgeConfig { interface: Some("awg0".into()), routing_mark: None, endpoints: vec![] };
         let cfg = generate_config(&test_server(), 1080, 1081, false, &[], "proxy", &bridge).unwrap();
         let route_rules = cfg["route"]["rules"].as_array().unwrap();
-        assert!(route_rules.iter().all(|r| r["ip_cidr"].is_null() || r["outbound"] != "direct"
-            || r["ip_cidr"][0] == "192.0.2.1/32" == false));
+        assert!(
+            !route_rules.iter().any(|r| r["ip_cidr"].is_array() && r["outbound"] == "direct"),
+            "no anti-loop ip_cidr->direct rule should be emitted when endpoints is empty"
+        );
     }
 }
 ```
