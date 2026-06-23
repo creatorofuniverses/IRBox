@@ -6,6 +6,7 @@ import {
   SubscriptionInfo,
   Settings,
   RoutingRule,
+  BridgeConfig,
 } from "../api/tauri";
 import { setLang, Lang } from "../i18n/translations";
 
@@ -27,6 +28,7 @@ export interface AppState {
   settings: Settings;
   routingRules: RoutingRule[];
   defaultRoute: string;
+  bridge: BridgeConfig;
   toasts: Toast[];
   langTick: number; // bumped to force re-render on language change
   speedHistory: number[]; // last 60 download speed samples for sparkline
@@ -66,6 +68,7 @@ const initialState: AppState = {
   settings: defaultSettings,
   routingRules: [],
   defaultRoute: "proxy",
+  bridge: { interface: null, routing_mark: null, endpoints: [] },
   toasts: [],
   langTick: 0,
   speedHistory: [],
@@ -88,7 +91,7 @@ type Action =
   | { type: "REMOVE_TOAST"; id: number }
   | { type: "BUMP_LANG" }
   | { type: "PUSH_SPEED"; speed: number }
-  | { type: "SET_ROUTING_RULES"; rules: RoutingRule[]; defaultRoute: string }
+  | { type: "SET_ROUTING_RULES"; rules: RoutingRule[]; defaultRoute: string; bridge: BridgeConfig }
   | { type: "SET_ONBOARDING_COMPLETED"; completed: boolean };
 
 let toastId = 0;
@@ -164,7 +167,7 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, speedHistory: hist.slice(-60) };
     }
     case "SET_ROUTING_RULES":
-      return { ...state, routingRules: action.rules, defaultRoute: action.defaultRoute };
+      return { ...state, routingRules: action.rules, defaultRoute: action.defaultRoute, bridge: action.bridge };
     case "SET_ONBOARDING_COMPLETED":
       return { ...state, onboardingCompleted: action.completed };
     default:
@@ -221,7 +224,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: "SET_STATUS", status });
         dispatch({ type: "SET_SETTINGS", settings });
         dispatch({ type: "SET_SUBSCRIPTIONS", subs });
-        dispatch({ type: "SET_ROUTING_RULES", rules: routing.rules, defaultRoute: routing.default_route });
+        dispatch({ type: "SET_ROUTING_RULES", rules: routing.rules, defaultRoute: routing.default_route, bridge: routing.bridge });
         dispatch({ type: "SET_ONBOARDING_COMPLETED", completed: onboardingDone });
         setLang(settings.language as Lang);
       } catch (e) {

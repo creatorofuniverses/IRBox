@@ -179,8 +179,8 @@ export function OnboardingOverlay({ onComplete }: Props) {
 
     const allRules = [...state.routingRules, ...newRules];
     try {
-      await api.saveRoutingRules(allRules, state.defaultRoute);
-      dispatch({ type: "SET_ROUTING_RULES", rules: allRules, defaultRoute: state.defaultRoute });
+      await api.saveRoutingRules(allRules, state.defaultRoute, state.bridge);
+      dispatch({ type: "SET_ROUTING_RULES", rules: allRules, defaultRoute: state.defaultRoute, bridge: state.bridge });
       toast(t("routing.saved"), "success");
     } catch (e) {
       toast(`${e}`, "error");
