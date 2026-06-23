@@ -87,6 +87,19 @@ export interface RoutingRulesResponse {
   bridge: BridgeConfig;
 }
 
+export interface InterfaceConfig {
+  id: string;
+  label: string;
+  interface: string;
+  routing_mark: number | null;
+  endpoints: string[];
+}
+
+export interface InterfacesResponse {
+  interfaces: InterfaceConfig[];
+  active_interface_id: string | null;
+}
+
 // ── API calls ──────────────────────────────────
 
 export const api = {
@@ -157,6 +170,17 @@ export const api = {
 
   saveRoutingRules: (rules: RoutingRule[], defaultRoute: string, bridge: BridgeConfig) =>
     invoke<void>("save_routing_rules", { rules, defaultRoute, bridge }),
+
+  getInterfaces: () => invoke<InterfacesResponse>("get_interfaces"),
+
+  saveInterface: (config: InterfaceConfig) =>
+    invoke<void>("save_interface", { config }),
+
+  deleteInterface: (id: string) =>
+    invoke<void>("delete_interface", { id }),
+
+  setActiveInterface: (id: string | null) =>
+    invoke<void>("set_active_interface", { id }),
 
   getOnboardingCompleted: () => invoke<boolean>("get_onboarding_completed"),
 
