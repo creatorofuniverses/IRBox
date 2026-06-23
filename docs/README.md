@@ -115,6 +115,30 @@ hysteria2://password@server:port/?upmbps=100&downmbps=200&obfs=salamander&sni=ex
 
 ---
 
+## 🔀 Custom Interface Routing
+
+IRBox can route selected domains into a **network interface that you bring up and manage yourself** — for example a WireGuard/AmneziaWG tunnel created with `table = off`. IRBox does not create or destroy the interface; it only directs matching traffic into it via the **sing-box** core. (This feature is sing-box only; with the Xray core the **Interface** action falls back to **proxy**.)
+
+### Prerequisites
+
+- An interface you manage **outside** IRBox (e.g. `awg0`, `wg0`). On Linux, configure it with `table = off` and its own firewall mark (`fwmark`) so the OS does not automatically route all traffic into it.
+- The **sing-box** core selected in IRBox.
+
+### Setup
+
+1. Open the **Routing** page and locate **Custom interface routing**.
+2. Fill in:
+   - **Interface name** — the interface to bind to, e.g. `awg0`.
+   - **Endpoint IPs to exclude** — the tunnel server IP(s), comma-separated. In **TUN mode** these are pinned to a direct route so the tunnel's own handshake is not captured back into sing-box (which would otherwise create a routing loop).
+   - **Firewall mark (fwmark)** — optional `SO_MARK` to tag the routed traffic (Linux), matching your interface's mark.
+3. Add a routing rule (or edit one) and set its action to **Interface**. Matching domains now egress through your interface. If no interface name is configured, the action safely falls back to **proxy**.
+
+### How it works
+
+IRBox emits a sing-box `direct` outbound bound to your interface (`bind_interface`, plus optional `routing_mark`) and routes the matching domain rules to it. The endpoint-exclusion rule is inserted ahead of your rules so the tunnel can still reach its own server.
+
+> **Platform support:** solid on **Linux**. Binding works on Windows/macOS too, but bringing up and maintaining a `table = off` interface there is your responsibility (best-effort).
+
 ## 🌐 Supported Protocols
 
 ### Core Protocols
@@ -255,10 +279,10 @@ hy2://password@server.com:443/?upmbps=50&downmbps=100&obfs=salamander&obfs-passw
 
 ```bash
 # Clone the repository
-git clone https://github.com/frank-vpl/IRBox.git
+git clone https://github.com/creatorofuniverses/IRBox.git
 cd IRBox
 
-# Install dependencies
+# Install dependencies (also provides the Tauri CLI via @tauri-apps/cli)
 npm install
 
 # Download core executables
@@ -269,19 +293,21 @@ chmod +x cores.sh
 # On Windows:
 ./cores.bat
 
-# Build the application
-cargo tauri build
+# Run in development mode (hot reload)
+npm run tauri dev
 
-# Run in development mode
-npm run dev
+# Build release installers for the current platform
+npm run tauri build
 ```
+
+Built installers land in `src-tauri/target/release/bundle/`. See the main [README](../README.md#-build-from-source) for per-OS install steps and how releases are produced.
 
 ### Prerequisites
 
 - Rust and Cargo
-- Tauri CLI
-- NodeJS and NPM 
-- Tauri prerequisites
+- NodeJS and NPM (Node 18+)
+- Tauri CLI — comes from the pinned `@tauri-apps/cli` dev-dependency (installed by `npm install`); run via `npm run tauri`. No separate `cargo install tauri-cli` needed.
+- Tauri platform prerequisites — see <https://v2.tauri.app/start/prerequisites/>
 
 ### Project Structure
 

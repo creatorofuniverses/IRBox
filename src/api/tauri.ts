@@ -66,7 +66,7 @@ export interface ConnectionRecord {
   download_bytes: number;
 }
 
-export type RuleAction = "proxy" | "direct" | "block";
+export type RuleAction = "proxy" | "direct" | "block" | "bridge";
 
 export interface RoutingRule {
   id: string;
@@ -75,9 +75,16 @@ export interface RoutingRule {
   enabled: boolean;
 }
 
+export interface BridgeConfig {
+  interface: string | null;
+  routing_mark: number | null;
+  endpoints: string[];
+}
+
 export interface RoutingRulesResponse {
   rules: RoutingRule[];
   default_route: string;
+  bridge: BridgeConfig;
 }
 
 // ── API calls ──────────────────────────────────
@@ -148,8 +155,8 @@ export const api = {
 
   getRoutingRules: () => invoke<RoutingRulesResponse>("get_routing_rules"),
 
-  saveRoutingRules: (rules: RoutingRule[], defaultRoute: string) =>
-    invoke<void>("save_routing_rules", { rules, defaultRoute }),
+  saveRoutingRules: (rules: RoutingRule[], defaultRoute: string, bridge: BridgeConfig) =>
+    invoke<void>("save_routing_rules", { rules, defaultRoute, bridge }),
 
   getOnboardingCompleted: () => invoke<boolean>("get_onboarding_completed"),
 

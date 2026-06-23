@@ -113,7 +113,7 @@ impl CoreManager {
         *self.http_port.lock().await
     }
 
-    pub async fn start(&self, server: &Server, tun_mode: bool, routing_rules: &[RoutingRule], default_route: &str) -> Result<()> {
+    pub async fn start(&self, server: &Server, tun_mode: bool, routing_rules: &[RoutingRule], default_route: &str, bridge: &BridgeConfig) -> Result<()> {
         self.stop().await?;
 
         let core_type = self.core_type.lock().await.clone();
@@ -298,6 +298,10 @@ impl CoreManager {
                                 RuleAction::Direct => json!({ "domain_suffix": [domain], "outbound": "direct" }),
                                 RuleAction::Block => json!({ "domain_suffix": [domain], "action": "reject" }),
                                 RuleAction::Proxy => json!({ "domain_suffix": [domain], "outbound": "proxy" }),
+                                // Custom-protocol configs own their outbounds; the bridge outbound is
+                                // not injected here (unlike singbox::generate_config), so degrade to
+                                // proxy to avoid routing to a non-existent outbound (would fail to start).
+                                RuleAction::Bridge => json!({ "domain_suffix": [domain], "outbound": "proxy" }),
                             };
                             route_rules.push(rule_action);
                         }
@@ -336,7 +340,7 @@ impl CoreManager {
             }
         } else {
             let config = match core_type {
-                CoreType::SingBox => singbox::generate_config(server, socks_port, http_port, tun_mode, routing_rules, default_route)?,
+                CoreType::SingBox => singbox::generate_config(server, socks_port, http_port, tun_mode, routing_rules, default_route, bridge)?,
                 CoreType::Xray => xray::generate_config(server, socks_port, http_port, routing_rules, default_route)?,
             };
             

@@ -30,8 +30,9 @@ Designed for privacy-conscious users, IRBox offers multi-protocol support, advan
 
 ### Advanced Management
 - **Subscription Support** - Import and auto-update subscription URLs
-- **Routing Rules** - Domain-based rules (proxy/direct/block) with presets for ad blocking and regional bypass
+- **Routing Rules** - Domain-based rules (proxy/direct/block/interface) with presets for ad blocking and regional bypass
 - **Split Tunneling** - Choose default route: proxy all traffic or selected domains
+- **Custom Interface Routing** - Route selected domains into an externally-managed network interface (e.g. a WireGuard/AmneziaWG tunnel)
 
 ### Connection Modes
 - **System Proxy** - HTTP proxy for system-wide access
@@ -45,6 +46,21 @@ Designed for privacy-conscious users, IRBox offers multi-protocol support, advan
 - **Themes** - 2 color themes (Dark, Light)
 - **Styles** - Default, Minimal
 
+## 🔀 Custom Interface Routing
+
+IRBox can route selected domains **into a network interface that you bring up and manage yourself** — for example a WireGuard/AmneziaWG tunnel created with `table = off`. IRBox does **not** create or tear down the interface; it only directs matching traffic into it via sing-box. This is sing-box only (with the Xray core, the `interface` action falls back to `proxy`).
+
+**How to use it:**
+
+1. Bring up your interface outside IRBox (e.g. `awg0` / `wg0`). On Linux, configure it with `table = off` and its own firewall mark so the OS does not route everything into it automatically.
+2. In IRBox, open the **Routing** page and find the **Custom interface routing** section:
+   - **Interface name** — the interface to bind to, e.g. `awg0`.
+   - **Endpoint IPs to exclude** — the tunnel server IP(s), comma-separated. In TUN mode these are kept on a direct route so the tunnel's own handshake is not captured back into sing-box (which would otherwise create a routing loop).
+   - **Firewall mark (fwmark)** — optional `SO_MARK` to tag the bridged traffic (Linux), matching your interface's mark.
+3. Add a routing rule (or edit an existing one) and set its action to **Interface**. Matching domains are now routed into your interface. If no interface name is set, the action safely falls back to `proxy`.
+
+> **Platform note:** solid on **Linux**; binding works on Windows/macOS too, but managing a `table = off` interface there is your responsibility (best-effort).
+
 ## 🎁 Gift: Free Xray / sing-box Configs
 
 As a small gift to the community, IRBox provides a **free public subscription** compatible with **Xray** and **sing-box** clients.
@@ -54,56 +70,98 @@ As a small gift to the community, IRBox provides a **free public subscription** 
 https://raw.githubusercontent.com/frank-vpl/servers/refs/heads/main/irbox
 ```
 
-## 🛠️ Installation
+## 📥 Download
+
+If you just want to use IRBox, grab a prebuilt installer for your platform from the **[Releases page](https://github.com/creatorofuniverses/IRBox/releases)** — no toolchain or compilation required:
+
+| Platform | Files |
+|----------|-------|
+| **Windows** | `.exe` (NSIS installer) or `.msi` |
+| **macOS** | `.dmg` (Intel & Apple Silicon) |
+| **Linux** | `.AppImage`, `.deb`, or `.rpm` |
+
+> ℹ️ IRBox starts in **Proxy Mode** by default (no special permissions). **TUN Mode** routes all traffic and needs elevated privileges — use **Settings → VPN Mode → TUN → Run as Administrator**, or launch the app with `sudo` / as Administrator.
+
+## 🛠️ Build from source
+
+For development or to build the installers yourself.
 
 ### Prerequisites
-- Rust and Cargo
-- Tauri CLI
-- NodeJS and NPM 
-- Tauri prerequisites
+- **Rust and Cargo** (stable)
+- **Node.js and npm** (Node 18+)
+- **Tauri CLI** — comes from the pinned `@tauri-apps/cli` dev-dependency; `npm install` (below) provides it, and you run it via `npm run tauri`. No separate `cargo install tauri-cli` needed — this keeps the CLI version locked together with `@tauri-apps/api`.
+- **Platform dependencies** ([Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)):
+  - **Linux:** `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`
+  - **Windows:** Microsoft C++ Build Tools + WebView2 (preinstalled on Windows 11)
+  - **macOS:** Xcode Command Line Tools
 
-### Quick Setup
+### Setup
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/frank-vpl/IRBox.git
+   git clone https://github.com/creatorofuniverses/IRBox.git
    cd IRBox
    ```
 
-2. **Install dependencies**
+2. **Install frontend dependencies**
    ```bash
    npm install
    ```
-   
-3. **Install Tauri CLI**
-   ```bash
-   cargo install tauri-cli --version ^2
-   ```
 
-4. **Download cores**
+3. **Download the proxy cores** (sing-box & xray sidecars + geoip/geosite). The target is auto-detected from `rustc`; pass one explicitly to cross-build (e.g. `./cores.sh x86_64-pc-windows-msvc`).
 
-   **Windows:**
-   ```bash
-   ./cores.bat
-   ```
-   
    **Linux/macOS:**
    ```bash
    chmod +x cores.sh
    ./cores.sh
    ```
 
-## 🚀 Usage
+   **Windows:**
+   ```bash
+   ./cores.bat
+   ```
 
-### Development
+### Run & build
+
 ```bash
-cargo tauri dev
+# Run in development (hot reload)
+npm run tauri dev
+
+# Build release installers for the current platform
+npm run tauri build
 ```
 
-### Production
-```bash
-cargo tauri build
-```
+### Install your build
+
+`npm run tauri build` writes ready-to-install packages to `src-tauri/target/release/bundle/`. Install the one for your platform directly from there:
+
+- **Linux:**
+  ```bash
+  # AppImage — run directly, no install needed
+  chmod +x src-tauri/target/release/bundle/appimage/IRBox_*.AppImage
+  ./src-tauri/target/release/bundle/appimage/IRBox_*.AppImage
+
+  # Debian/Ubuntu
+  sudo apt install ./src-tauri/target/release/bundle/deb/IRBox_*.deb
+
+  # Fedora/RHEL
+  sudo rpm -i src-tauri/target/release/bundle/rpm/IRBox-*.rpm
+  ```
+- **Windows:** run the installer `src-tauri\target\release\bundle\nsis\IRBox_*-setup.exe` (or the `msi\IRBox_*.msi`).
+- **macOS:** open `src-tauri/target/release/bundle/dmg/IRBox_*.dmg` and drag **IRBox** into **Applications**.
+
+> Building locally produces the exact same installers the [Releases](https://github.com/creatorofuniverses/IRBox/releases) ship — so once you've built, install from `bundle/` rather than downloading anything.
+
+## 📦 Creating a release
+
+Releases are produced automatically by the [`Build` workflow](.github/workflows/build.yaml), which builds for Windows (x86_64 & ARM64), macOS (Intel & Apple Silicon), and Linux (x86_64), then publishes the installers to a GitHub Release. Trigger it by either:
+
+- **Pushing a version tag:**
+  ```bash
+  git tag v1.0.0
+  git push origin v1.0.0
+  ```
+- **Or** running the workflow manually from the **Actions** tab (*workflow_dispatch*) and entering a tag name.
 
 ## 🤝 Contributing
 

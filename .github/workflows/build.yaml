@@ -61,15 +61,8 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf || \
           sudo apt-get install -y libwebkit2gtk-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Install dependencies (macOS)
-        if: matrix.os == 'macos-latest'
-        run: brew install webkit2png
-
       - name: Install frontend dependencies
         run: npm install
-
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2"
 
       - name: Download core executables (Linux/macOS)
         if: matrix.os != 'windows-latest'
@@ -145,7 +138,7 @@ jobs:
         shell: pwsh
 
       - name: Build Tauri app
-        run: cargo tauri build --target ${{ matrix.target }}
+        run: npm run tauri build -- --target ${{ matrix.target }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -213,9 +206,9 @@ jobs:
 
             ### Assets
             This release includes installers/packages for:
-            - Windows (x86_64 MSVC/GNU and ARM64 MSVC)
+            - Windows (x86_64 and ARM64, MSVC)
             - macOS (Intel and Apple Silicon)
-            - Linux (x86_64 and ARM64)
+            - Linux (x86_64)
 
             ### System Requirements
             - Windows 10 or later
