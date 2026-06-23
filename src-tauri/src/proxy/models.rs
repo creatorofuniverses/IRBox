@@ -329,6 +329,22 @@ pub struct ConnectionRecord {
     pub download_bytes: u64,
 }
 
+/// Configuration for routing into an externally-managed network interface (the
+/// "bridge" outbound). The interface itself is created/owned outside IRBox.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct BridgeConfig {
+    /// Network interface to bind the bridge outbound to, e.g. "awg0".
+    #[serde(default)]
+    pub interface: Option<String>,
+    /// Optional SO_MARK / fwmark to tag bridge egress (Linux).
+    #[serde(default)]
+    pub routing_mark: Option<u32>,
+    /// Interface server endpoint IP/CIDRs kept on `direct` to avoid a routing
+    /// loop in TUN mode. A list — supports multi-peer tunnels.
+    #[serde(default)]
+    pub endpoints: Vec<String>,
+}
+
 /// App state persisted to disk
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppState {
@@ -344,6 +360,8 @@ pub struct AppState {
     pub routing_rules: Vec<RoutingRule>,
     #[serde(default = "default_route")]
     pub default_route: String,
+    #[serde(default)]
+    pub bridge: BridgeConfig,
     #[serde(default)]
     pub onboarding_completed: bool,
 }
@@ -364,4 +382,37 @@ pub enum CoreType {
 pub struct TrafficStats {
     pub upload: u64,
     pub download: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bridge_config_defaults_are_empty() {
+        let b = BridgeConfig::default();
+        assert!(b.interface.is_none());
+        assert!(b.routing_mark.is_none());
+        assert!(b.endpoints.is_empty());
+    }
+
+    #[test]
+    fn bridge_config_serde_roundtrip() {
+        let b = BridgeConfig {
+            interface: Some("awg0".to_string()),
+            routing_mark: Some(51820),
+            endpoints: vec!["192.0.2.1/32".to_string(), "198.51.100.7".to_string()],
+        };
+        let json = serde_json::to_string(&b).unwrap();
+        let back: BridgeConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.interface.as_deref(), Some("awg0"));
+        assert_eq!(back.routing_mark, Some(51820));
+        assert_eq!(back.endpoints, vec!["192.0.2.1/32", "198.51.100.7"]);
+    }
+
+    #[test]
+    fn appstate_default_has_empty_bridge() {
+        let s = AppState::default();
+        assert!(s.bridge.interface.is_none());
+    }
 }
