@@ -99,6 +99,11 @@ export interface InterfacesResponse {
   active_interface_id: string | null;
 }
 
+export interface InterfaceStatus {
+  id: string;
+  status: string; // "up" | "down" | "unknown"
+}
+
 // ── API calls ──────────────────────────────────
 
 export const api = {
@@ -171,6 +176,8 @@ export const api = {
     invoke<void>("save_routing_rules", { rules, defaultRoute }),
 
   getInterfaces: () => invoke<InterfacesResponse>("get_interfaces"),
+
+  getInterfaceStatuses: () => invoke<InterfaceStatus[]>("get_interface_statuses"),
 
   saveInterface: (config: InterfaceConfig) =>
     invoke<void>("save_interface", { config }),
