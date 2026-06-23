@@ -131,7 +131,26 @@ cargo tauri dev
 cargo tauri build
 ```
 
-Built installers/packages land in `src-tauri/target/release/bundle/` (or `src-tauri/target/<target>/release/bundle/` when a `--target` is given).
+### Install your build
+
+`cargo tauri build` writes ready-to-install packages to `src-tauri/target/release/bundle/`. Install the one for your platform directly from there:
+
+- **Linux:**
+  ```bash
+  # AppImage — run directly, no install needed
+  chmod +x src-tauri/target/release/bundle/appimage/IRBox_*.AppImage
+  ./src-tauri/target/release/bundle/appimage/IRBox_*.AppImage
+
+  # Debian/Ubuntu
+  sudo apt install ./src-tauri/target/release/bundle/deb/IRBox_*.deb
+
+  # Fedora/RHEL
+  sudo rpm -i src-tauri/target/release/bundle/rpm/IRBox-*.rpm
+  ```
+- **Windows:** run the installer `src-tauri\target\release\bundle\nsis\IRBox_*-setup.exe` (or the `msi\IRBox_*.msi`).
+- **macOS:** open `src-tauri/target/release/bundle/dmg/IRBox_*.dmg` and drag **IRBox** into **Applications**.
+
+> Building locally produces the exact same installers the [Releases](https://github.com/creatorofuniverses/IRBox/releases) ship — so once you've built, install from `bundle/` rather than downloading anything.
 
 ## 📦 Creating a release
 
