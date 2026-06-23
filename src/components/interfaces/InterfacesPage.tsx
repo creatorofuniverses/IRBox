@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApp } from "../../context/AppContext";
 import { api, InterfaceConfig } from "../../api/tauri";
 import { t } from "../../i18n/translations";
@@ -11,6 +11,7 @@ export function InterfacesPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<InterfaceConfig | null>(null);
+  const [statuses, setStatuses] = useState<Record<string, string>>({});
 
   const refresh = async () => {
     const res = await api.getInterfaces();
@@ -46,6 +47,28 @@ export function InterfacesPage() {
     }
   };
 
+  // Poll interface liveness every 7s while the page is mounted and interfaces exist.
+  useEffect(() => {
+    if (state.interfaces.length === 0) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const list = await api.getInterfaceStatuses();
+        if (!cancelled) {
+          setStatuses(Object.fromEntries(list.map((s) => [s.id, s.status])));
+        }
+      } catch {
+        // ignore polling errors
+      }
+    };
+    poll();
+    const timer = setInterval(poll, 7000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [state.interfaces.length]);
+
   return (
     <div className="sub-page">
       <div className="sub-header">
@@ -63,6 +86,10 @@ export function InterfacesPage() {
               <div key={iface.id} className={`sub-card ${active ? "sub-featured" : ""}`}>
                 <div className="sub-info">
                   <span className="sub-name">
+                    <span
+                      className={`iface-status iface-status-${statuses[iface.id] ?? "unknown"}`}
+                      title={t(`interfaces.status.${statuses[iface.id] ?? "unknown"}` as never)}
+                    />
                     {iface.label}
                     {active && <span className="sub-featured-badge">{t("interfaces.active")}</span>}
                   </span>

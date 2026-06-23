@@ -1,6 +1,6 @@
 {
   "name": "irbox",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "IRBox Client - A versatile proxy client supporting multiple protocols including VLESS, VMess, Shadowsocks, Trojan, Hysteria2, and TUIC with advanced management features, subscription support, routing rules, and system proxy/TUN modes.",
   "type": "module",
   "license": "GPL-3.0",

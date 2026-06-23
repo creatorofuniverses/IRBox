@@ -14,6 +14,7 @@ const translations = {
   "status.connected": { en: "Connected" },
   "status.disconnected": { en: "Disconnected" },
   "status.connecting": { en: "Connecting..." },
+  "status.interfaceOnly": { en: "Interface-only" },
 
   // Server list
   "servers.search": { en: "Search servers...", ru: "Поиск серверов..." },
@@ -36,6 +37,7 @@ const translations = {
   },
   "servers.cancel": { en: "Cancel", ru: "Отмена" },
   "servers.selectFirst": { en: "Select a server first", ru: "Сначала выберите сервер" },
+  "servers.selectFirstOrInterface": { en: "Select a server or activate an interface first" },
   "servers.bestServer": { en: "Best server", ru: "Лучший сервер" },
   "servers.remove": { en: "Remove", ru: "Удалить" },
   "servers.sortName": { en: "By name", ru: "По имени" },
@@ -166,6 +168,9 @@ const translations = {
   "interfaces.errInterfaceFormat": { en: "Interface name must have no spaces" },
   "interfaces.errEndpoint": { en: "Invalid endpoint (use IP or CIDR)" },
   "interfaces.noActiveHint": { en: "A rule uses the \"Interface\" action but no interface is active. Open Interfaces to activate one." },
+  "interfaces.status.up": { en: "Up" },
+  "interfaces.status.down": { en: "Down" },
+  "interfaces.status.unknown": { en: "Unknown" },
 
   // Onboarding
   "onboarding.welcome": { en: "Welcome to IRBox!", ru: "Добро пожаловать в IRBox!" },

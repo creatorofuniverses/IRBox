@@ -42,14 +42,18 @@ export function StatusPanel() {
         dispatch({ type: "SET_STATUS", status });
         toast(t("toast.disconnected"), "info");
       } else {
-        if (!state.selectedServerId) {
-          toast(t("servers.selectFirst"), "error");
+        if (!state.selectedServerId && !state.activeInterfaceId) {
+          toast(t("servers.selectFirstOrInterface"), "error");
           setLoading(false);
           return;
         }
         const status = await api.connect(state.selectedServerId);
         dispatch({ type: "SET_STATUS", status });
-        toast(`${t("toast.connectedTo")} ${status.server_name}`, "success");
+        const label =
+          status.server_name ??
+          state.interfaces.find((i) => i.id === state.activeInterfaceId)?.label ??
+          t("status.interfaceOnly");
+        toast(`${t("toast.connectedTo")} ${label}`, "success");
       }
     } catch (e) {
       toast(`${e}`, "error");
@@ -60,13 +64,14 @@ export function StatusPanel() {
   const selectedServer = state.servers.find(
     (s) => s.id === state.selectedServerId
   );
+  const canConnect = !!state.selectedServerId || !!state.activeInterfaceId;
 
   return (
     <div className="status-panel">
       <button
         className={`connect-btn ${state.connected ? "connected" : ""} ${loading ? "loading" : ""}`}
         onClick={handleToggle}
-        disabled={loading}
+        disabled={loading || (!state.connected && !canConnect)}
       >
         <div className="connect-btn-inner">
           {loading ? (
@@ -84,6 +89,12 @@ export function StatusPanel() {
         </div>
         {state.connected && state.serverName && (
           <div className="status-server">{state.serverName}</div>
+        )}
+        {state.connected && !state.serverName && state.activeInterfaceId && (
+          <div className="status-server">
+            {t("status.interfaceOnly")} ·{" "}
+            {state.interfaces.find((i) => i.id === state.activeInterfaceId)?.label ?? ""}
+          </div>
         )}
         {!state.connected && selectedServer && (
           <div className="status-server selected">

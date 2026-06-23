@@ -1,6 +1,9 @@
 # Spec: Multi-interface management ("Interfaces" page)
 
-> **Status:** approved design, NOT yet implemented. Future feature.
+> **Status:** ✅ **Shipped (v1.2.0).** The core redesign + editable routing rules
+> landed in PR #2; interface-only mode (item B) and the liveness indicator
+> (item C) landed in PR #3. All "Additional scope" items (A–D) are implemented;
+> the only remaining "future" item is an active reachability probe for liveness.
 > **Builds on / revises:** `2026-06-23-bridge-interface-routing-design.md` (the
 > shipped single-interface "bridge" feature, v1.1.0). That feature stays as-is
 > and merges first; this spec redesigns its UX into a proper multi-interface
@@ -243,6 +246,10 @@ all. This redesign must:
 
 ### B. Enable with an active interface even when no proxy server is connected
 
+> ✅ **Shipped in PR #3 (v1.2.0).** `generate_config`/`CoreManager::start` take
+> `Option<&Server>`; `connect` takes `Option<String>`; interface-only mode forces
+> sing-box and stops the core on empty (M4) via `reconcile_core`.
+
 **Problem:** today the core (sing-box) only starts when the user connects to a
 **proxy server** via the main Connect button (`api.connect(selectedServerId)` in
 `StatusPanel.tsx`). Routing rules — including the `Interface` action — only take
@@ -294,6 +301,12 @@ traffic untouched — least surprise for a "route a few domains into my tunnel"
 mode; `block` would silently blackhole everything unmatched).
 
 ### C. Interface liveness check + status indicator
+
+> ✅ **Shipped in PR #3 (v1.2.0).** `core::iface_status::interface_status` reads
+> `/sys/class/net/<iface>/operstate` (presence + operstate; `unknown` off-Linux);
+> the Interfaces page polls `get_interface_statuses` every 7s and shows an
+> up/down/unknown dot per card. The status-panel indicator, active-down toast,
+> and active reachability probe remain future work.
 
 Mirror how proxy connection status is surfaced, for the active interface:
 
