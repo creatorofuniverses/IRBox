@@ -1,8 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useApp } from "../../context/AppContext";
-import { api, RoutingRule, RuleAction, BridgeConfig } from "../../api/tauri";
+import { api, RoutingRule, RuleAction } from "../../api/tauri";
 import { t } from "../../i18n/translations";
-import { getLang } from "../../i18n/translations";
 
 export interface Preset {
   id: string;
@@ -66,12 +65,12 @@ export function RoutingPage() {
   }, []);
 
   const save = useCallback(
-    (rules: RoutingRule[], defaultRoute: string, bridge: BridgeConfig) => {
-      dispatch({ type: "SET_ROUTING_RULES", rules, defaultRoute, bridge });
+    (rules: RoutingRule[], defaultRoute: string) => {
+      dispatch({ type: "SET_ROUTING_RULES", rules, defaultRoute });
       clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(async () => {
         try {
-          await api.saveRoutingRules(rules, defaultRoute, bridge);
+          await api.saveRoutingRules(rules, defaultRoute);
           toast(t("routing.saved"), "success");
         } catch (e) {
           toast(`${e}`, "error");
@@ -82,7 +81,7 @@ export function RoutingPage() {
   );
 
   const setDefaultRoute = (route: string) => {
-    save(state.routingRules, route, state.bridge);
+    save(state.routingRules, route);
   };
 
   const addRule = () => {
@@ -98,15 +97,14 @@ export function RoutingPage() {
       action: newAction,
       enabled: true,
     };
-    save([...state.routingRules, rule], state.defaultRoute, state.bridge);
+    save([...state.routingRules, rule], state.defaultRoute);
     setNewDomain("");
   };
 
   const removeRule = (id: string) => {
     save(
       state.routingRules.filter((r) => r.id !== id),
-      state.defaultRoute,
-      state.bridge
+      state.defaultRoute
     );
   };
 
@@ -115,8 +113,7 @@ export function RoutingPage() {
       state.routingRules.map((r) =>
         r.id === id ? { ...r, enabled: !r.enabled } : r
       ),
-      state.defaultRoute,
-      state.bridge
+      state.defaultRoute
     );
   };
 
@@ -142,8 +139,7 @@ export function RoutingPage() {
       state.routingRules.map((r) =>
         r.id === editingId ? { ...r, domain, action: editAction } : r
       ),
-      state.defaultRoute,
-      state.bridge
+      state.defaultRoute
     );
     setEditingId(null);
   };
@@ -162,7 +158,7 @@ export function RoutingPage() {
       toast("All preset domains already added", "info");
       return;
     }
-    save([...state.routingRules, ...newRules], state.defaultRoute, state.bridge);
+    save([...state.routingRules, ...newRules], state.defaultRoute);
   };
 
   const actionColor = (action: RuleAction) => {
@@ -178,13 +174,9 @@ export function RoutingPage() {
     }
   };
 
-  const parseEndpoints = (raw: string): string[] =>
-    raw.split(/[\s,]+/).map((s) => s.trim()).filter((s) => s.length > 0);
-
-  const setBridge = (patch: Partial<BridgeConfig>) =>
-    save(state.routingRules, state.defaultRoute, { ...state.bridge, ...patch });
-
-  const lang = getLang();
+  const needsActiveIface =
+    state.activeInterfaceId === null &&
+    state.routingRules.some((r) => r.enabled && r.action === "bridge");
 
   return (
     <div className="routing-page">
@@ -224,44 +216,6 @@ export function RoutingPage() {
               <span className="vpn-mode-desc">{t("routing.directAllDesc")}</span>
             </div>
           </label>
-        </div>
-      </div>
-
-      {/* Bridge / Custom interface routing settings */}
-      <div className="settings-section">
-        <div className="settings-label">{t("routing.bridgeSettings")}</div>
-        <div className="vpn-mode-desc">{t("routing.bridgeHelp")}</div>
-        <div className="form-group">
-          <label className="form-label">{t("routing.bridgeInterface")}</label>
-          <input
-            className="form-input"
-            type="text"
-            placeholder={t("routing.bridgeInterfacePlaceholder")}
-            value={state.bridge.interface ?? ""}
-            onChange={(e) => setBridge({ interface: e.target.value.trim() || null })}
-          />
-        </div>
-        <div className="form-group">
-          <label className="form-label">{t("routing.bridgeEndpoints")}</label>
-          <input
-            className="form-input"
-            type="text"
-            placeholder={t("routing.bridgeEndpointsPlaceholder")}
-            value={state.bridge.endpoints.join(", ")}
-            onChange={(e) => setBridge({ endpoints: parseEndpoints(e.target.value) })}
-          />
-        </div>
-        <div className="form-group">
-          <label className="form-label">{t("routing.bridgeMark")}</label>
-          <input
-            className="form-input"
-            type="number"
-            placeholder={t("routing.bridgeMarkPlaceholder")}
-            value={state.bridge.routing_mark ?? ""}
-            onChange={(e) =>
-              setBridge({ routing_mark: e.target.value === "" ? null : Number(e.target.value) })
-            }
-          />
         </div>
       </div>
 
@@ -314,6 +268,15 @@ export function RoutingPage() {
         <div className="settings-label">
           {t("routing.rules")} ({state.routingRules.length})
         </div>
+        {needsActiveIface && (
+          <div
+            className="vpn-mode-desc"
+            style={{ cursor: "pointer", color: "var(--warning)" }}
+            onClick={() => dispatch({ type: "SET_PAGE", page: "interfaces" })}
+          >
+            {t("interfaces.noActiveHint")}
+          </div>
+        )}
         {state.routingRules.length === 0 ? (
           <div className="empty-list">{t("routing.noRules")}</div>
         ) : (

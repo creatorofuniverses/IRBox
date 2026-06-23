@@ -84,7 +84,6 @@ export interface BridgeConfig {
 export interface RoutingRulesResponse {
   rules: RoutingRule[];
   default_route: string;
-  bridge: BridgeConfig;
 }
 
 export interface InterfaceConfig {
@@ -168,8 +167,8 @@ export const api = {
 
   getRoutingRules: () => invoke<RoutingRulesResponse>("get_routing_rules"),
 
-  saveRoutingRules: (rules: RoutingRule[], defaultRoute: string, bridge: BridgeConfig) =>
-    invoke<void>("save_routing_rules", { rules, defaultRoute, bridge }),
+  saveRoutingRules: (rules: RoutingRule[], defaultRoute: string) =>
+    invoke<void>("save_routing_rules", { rules, defaultRoute }),
 
   getInterfaces: () => invoke<InterfacesResponse>("get_interfaces"),
 
