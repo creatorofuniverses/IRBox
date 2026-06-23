@@ -666,6 +666,7 @@ fn state_path() -> std::path::PathBuf {
 pub struct RoutingRulesResponse {
     pub rules: Vec<RoutingRule>,
     pub default_route: String,
+    pub bridge: BridgeConfig,
 }
 
 #[tauri::command]
@@ -674,6 +675,7 @@ pub async fn get_routing_rules(ctx: State<'_, AppContext>) -> Result<RoutingRule
     Ok(RoutingRulesResponse {
         rules: state.routing_rules.clone(),
         default_route: state.default_route.clone(),
+        bridge: state.bridge.clone(),
     })
 }
 
@@ -681,11 +683,13 @@ pub async fn get_routing_rules(ctx: State<'_, AppContext>) -> Result<RoutingRule
 pub async fn save_routing_rules(
     rules: Vec<RoutingRule>,
     default_route: String,
+    bridge: BridgeConfig,
     ctx: State<'_, AppContext>,
 ) -> Result<(), String> {
     let mut state = ctx.state.lock().await;
     state.routing_rules = rules;
     state.default_route = default_route;
+    state.bridge = bridge;
     save_state(&state);
 
     // If connected, reconnect to apply new rules
