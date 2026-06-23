@@ -434,6 +434,49 @@ impl AppState {
     }
 }
 
+impl AppState {
+    /// Insert or update an interface. Empty id => new (mint uuid). Fills `label`
+    /// from `interface` when blank. Returns true if the change touched the
+    /// currently-active interface (the caller reconnects only then — M3).
+    pub fn upsert_interface(&mut self, mut config: InterfaceConfig) -> bool {
+        if config.label.trim().is_empty() {
+            config.label = config.interface.clone();
+        }
+        if config.id.is_empty() {
+            config.id = uuid::Uuid::new_v4().to_string();
+            self.interfaces.push(config);
+            false
+        } else {
+            let touched_active = self.active_interface_id.as_deref() == Some(config.id.as_str());
+            if let Some(slot) = self.interfaces.iter_mut().find(|i| i.id == config.id) {
+                *slot = config;
+            } else {
+                self.interfaces.push(config);
+            }
+            touched_active
+        }
+    }
+
+    /// Remove an interface by id. Clears the active selection if it pointed
+    /// here. Returns true if the deleted interface was active.
+    pub fn delete_interface(&mut self, id: &str) -> bool {
+        let was_active = self.active_interface_id.as_deref() == Some(id);
+        self.interfaces.retain(|i| i.id != id);
+        if was_active {
+            self.active_interface_id = None;
+        }
+        was_active
+    }
+
+    /// Set the active interface, ignoring an unknown id (clears instead).
+    pub fn set_active(&mut self, id: Option<String>) {
+        self.active_interface_id = match id {
+            Some(id) if self.interfaces.iter().any(|i| i.id == id) => Some(id),
+            _ => None,
+        };
+    }
+}
+
 /// Which proxy core to use
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
@@ -566,5 +609,67 @@ mod tests {
         s.sync_legacy_bridge();
         assert!(s.bridge.interface.is_none());
         assert!(s.bridge.endpoints.is_empty());
+    }
+
+    fn ic(id: &str, name: &str) -> InterfaceConfig {
+        InterfaceConfig { id: id.into(), label: name.into(), interface: name.into(), routing_mark: None, endpoints: vec![] }
+    }
+
+    #[test]
+    fn upsert_new_mints_id_and_is_not_active() {
+        let mut s = AppState::default();
+        let touched = s.upsert_interface(InterfaceConfig {
+            id: "".into(), label: "".into(), interface: "awg0".into(), routing_mark: None, endpoints: vec![],
+        });
+        assert!(!touched);
+        assert_eq!(s.interfaces.len(), 1);
+        assert!(!s.interfaces[0].id.is_empty());
+        assert_eq!(s.interfaces[0].label, "awg0"); // label filled from interface
+    }
+
+    #[test]
+    fn upsert_edit_of_active_returns_true() {
+        let mut s = AppState { interfaces: vec![ic("a", "awg0")], active_interface_id: Some("a".into()), ..Default::default() };
+        let touched = s.upsert_interface(InterfaceConfig {
+            id: "a".into(), label: "Renamed".into(), interface: "awg1".into(), routing_mark: None, endpoints: vec![],
+        });
+        assert!(touched);
+        assert_eq!(s.interfaces[0].interface, "awg1");
+        assert_eq!(s.interfaces[0].label, "Renamed");
+    }
+
+    #[test]
+    fn upsert_edit_of_nonactive_returns_false() {
+        let mut s = AppState { interfaces: vec![ic("a", "awg0"), ic("b", "wg1")], active_interface_id: Some("a".into()), ..Default::default() };
+        let touched = s.upsert_interface(ic("b", "wg2"));
+        assert!(!touched);
+        assert_eq!(s.interfaces[1].interface, "wg2");
+    }
+
+    #[test]
+    fn delete_active_clears_and_returns_true() {
+        let mut s = AppState { interfaces: vec![ic("a", "awg0")], active_interface_id: Some("a".into()), ..Default::default() };
+        let was_active = s.delete_interface("a");
+        assert!(was_active);
+        assert!(s.interfaces.is_empty());
+        assert!(s.active_interface_id.is_none());
+    }
+
+    #[test]
+    fn delete_nonactive_keeps_active_returns_false() {
+        let mut s = AppState { interfaces: vec![ic("a", "awg0"), ic("b", "wg1")], active_interface_id: Some("a".into()), ..Default::default() };
+        let was_active = s.delete_interface("b");
+        assert!(!was_active);
+        assert_eq!(s.active_interface_id.as_deref(), Some("a"));
+        assert_eq!(s.interfaces.len(), 1);
+    }
+
+    #[test]
+    fn set_active_unknown_id_clears() {
+        let mut s = AppState { interfaces: vec![ic("a", "awg0")], active_interface_id: Some("a".into()), ..Default::default() };
+        s.set_active(Some("ghost".into()));
+        assert!(s.active_interface_id.is_none());
+        s.set_active(Some("a".into()));
+        assert_eq!(s.active_interface_id.as_deref(), Some("a"));
     }
 }

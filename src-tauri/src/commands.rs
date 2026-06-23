@@ -694,6 +694,67 @@ pub async fn save_routing_rules(
     Ok(())
 }
 
+#[derive(Serialize)]
+pub struct InterfacesResponse {
+    pub interfaces: Vec<InterfaceConfig>,
+    pub active_interface_id: Option<String>,
+}
+
+#[tauri::command]
+pub async fn get_interfaces(ctx: State<'_, AppContext>) -> Result<InterfacesResponse, String> {
+    let state = ctx.state.lock().await;
+    Ok(InterfacesResponse {
+        interfaces: state.interfaces.clone(),
+        active_interface_id: state.active_interface_id.clone(),
+    })
+}
+
+#[tauri::command]
+pub async fn save_interface(ctx: State<'_, AppContext>, config: InterfaceConfig) -> Result<(), String> {
+    if config.interface.trim().is_empty() {
+        return Err("Interface name is required".into());
+    }
+    let touched_active;
+    {
+        let mut state = ctx.state.lock().await;
+        touched_active = state.upsert_interface(config);
+        state.sync_legacy_bridge();
+        save_state(&state);
+    }
+    if touched_active {
+        reconnect_active(&ctx).await;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_interface(ctx: State<'_, AppContext>, id: String) -> Result<(), String> {
+    let was_active;
+    {
+        let mut state = ctx.state.lock().await;
+        was_active = state.delete_interface(&id);
+        state.sync_legacy_bridge();
+        save_state(&state);
+    }
+    if was_active {
+        reconnect_active(&ctx).await;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_active_interface(ctx: State<'_, AppContext>, id: Option<String>) -> Result<(), String> {
+    {
+        let mut state = ctx.state.lock().await;
+        state.set_active(id);
+        state.sync_legacy_bridge();
+        save_state(&state);
+    }
+    // The active selection changed — always reconnect a live core.
+    reconnect_active(&ctx).await;
+    Ok(())
+}
+
 /// Check if onboarding is completed
 #[tauri::command]
 pub async fn get_onboarding_completed(ctx: State<'_, AppContext>) -> Result<bool, String> {
