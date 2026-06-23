@@ -139,56 +139,67 @@ pub async fn remove_server(ctx: State<'_, AppContext>, server_id: String) -> Res
     Ok(())
 }
 
-/// Connect to a server
+/// Connect to a proxy server, an active interface, or both.
 #[tauri::command]
-pub async fn connect(ctx: State<'_, AppContext>, server_id: String) -> Result<StatusResponse, String> {
+pub async fn connect(ctx: State<'_, AppContext>, server_id: Option<String>) -> Result<StatusResponse, String> {
     let mut state = ctx.state.lock().await;
-    let server = state
-        .servers
-        .iter()
-        .find(|s| s.id == server_id)
-        .cloned()
-        .ok_or("Server not found")?;
+
+    // Resolve the proxy server when one was requested.
+    let server = match &server_id {
+        Some(id) => Some(
+            state.servers.iter().find(|s| &s.id == id).cloned()
+                .ok_or("Server not found")?,
+        ),
+        None => None,
+    };
+    let active_iface = state.active_interface().cloned();
+
+    // Need at least one of: a proxy server, or an active interface.
+    if server.is_none() && active_iface.is_none() {
+        return Err("Select a proxy server or activate an interface first".into());
+    }
 
     let tun_mode = state.settings.vpn_mode == "tun";
     let routing_rules = state.routing_rules.clone();
     let default_route = state.default_route.clone();
-    let active_iface = state.active_interface().cloned();
 
     ctx.core
-        .start(Some(&server), tun_mode, &routing_rules, &default_route, active_iface.as_ref())
+        .start(server.as_ref(), tun_mode, &routing_rules, &default_route, active_iface.as_ref())
         .await
         .map_err(|e| format!("Failed to start core: {}", e))?;
 
     let http_port = ctx.core.http_port().await;
 
-    // Only set system proxy in proxy mode; TUN captures all traffic directly
+    // System proxy applies whenever we're not in TUN mode (so app traffic reaches
+    // sing-box) — in proxy, interface-only, and both modes alike.
     if !tun_mode {
         proxy_setter::set_system_proxy("127.0.0.1", http_port)
             .map_err(|e| format!("Failed to set system proxy: {}", e))?;
     }
 
-    // Record session
-    let record = ConnectionRecord {
-        server_name: server.name.clone(),
-        server_address: format!("{}:{}", server.address, server.port),
-        protocol: format!("{:?}", server.protocol).to_lowercase(),
-        core_type: format!("{:?}", ctx.core.get_core_type().await),
-        vpn_mode: if tun_mode { "tun".to_string() } else { "proxy".to_string() },
-        connected_at: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-        disconnected_at: None,
-        upload_bytes: 0,
-        download_bytes: 0,
-    };
-    state.sessions.push(record);
+    // Record a session only when a proxy server is in use.
+    if let Some(ref server) = server {
+        let record = ConnectionRecord {
+            server_name: server.name.clone(),
+            server_address: format!("{}:{}", server.address, server.port),
+            protocol: format!("{:?}", server.protocol).to_lowercase(),
+            core_type: format!("{:?}", ctx.core.get_core_type().await),
+            vpn_mode: if tun_mode { "tun".to_string() } else { "proxy".to_string() },
+            connected_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+            disconnected_at: None,
+            upload_bytes: 0,
+            download_bytes: 0,
+        };
+        state.sessions.push(record);
+    }
 
-    state.active_server_id = Some(server_id);
+    state.active_server_id = server_id;
     save_state(&state);
 
     Ok(StatusResponse {
         connected: true,
-        server_name: Some(server.name),
+        server_name: server.as_ref().map(|s| s.name.clone()),
         core_type: format!("{:?}", ctx.core.get_core_type().await),
         socks_port: ctx.core.socks_port().await,
         http_port,
@@ -690,7 +701,7 @@ pub async fn save_routing_rules(
     drop(state);
 
     // Routing rules always affect the running config — reconnect if live.
-    reconnect_active(&ctx).await;
+    reconcile_core(&ctx).await;
     Ok(())
 }
 
@@ -722,7 +733,7 @@ pub async fn save_interface(ctx: State<'_, AppContext>, config: InterfaceConfig)
         save_state(&state);
     }
     if touched_active {
-        reconnect_active(&ctx).await;
+        reconcile_core(&ctx).await;
     }
     Ok(())
 }
@@ -737,7 +748,7 @@ pub async fn delete_interface(ctx: State<'_, AppContext>, id: String) -> Result<
         save_state(&state);
     }
     if was_active {
-        reconnect_active(&ctx).await;
+        reconcile_core(&ctx).await;
     }
     Ok(())
 }
@@ -751,7 +762,7 @@ pub async fn set_active_interface(ctx: State<'_, AppContext>, id: Option<String>
         save_state(&state);
     }
     // The active selection changed — always reconnect a live core.
-    reconnect_active(&ctx).await;
+    reconcile_core(&ctx).await;
     Ok(())
 }
 
@@ -887,22 +898,36 @@ fn save_state(state: &AppState) {
     }
 }
 
-/// Reconnect the running core so config changes take effect. No-op when the
-/// core isn't running or there's no active server. Resolves the active
-/// interface from current state.
-async fn reconnect_active(ctx: &AppContext) {
+/// Reconcile the running core with current state after a config change.
+/// Restarts when there's still something to route (proxy / interface-only /
+/// both); stops the core when nothing is left (no server, no active interface —
+/// the M4 case), mirroring `disconnect`'s cleanup. No-op when not running.
+async fn reconcile_core(ctx: &AppContext) {
     if !ctx.core.is_running().await {
         return;
     }
     let state = ctx.state.lock().await;
-    let Some(id) = state.active_server_id.clone() else { return };
-    let Some(server) = state.servers.iter().find(|s| s.id == id).cloned() else { return };
+    let server = state.active_server_id.as_ref()
+        .and_then(|id| state.servers.iter().find(|s| &s.id == id))
+        .cloned();
+    let active_iface = state.active_interface().cloned();
     let tun_mode = state.settings.vpn_mode == "tun";
     let rules = state.routing_rules.clone();
     let dr = state.default_route.clone();
-    let active_iface = state.active_interface().cloned();
     drop(state);
-    if let Err(e) = ctx.core.start(Some(&server), tun_mode, &rules, &dr, active_iface.as_ref()).await {
-        log::error!("Failed to reconnect after config change: {}", e);
+
+    // Nothing to route into any more — stop the core and clean up like disconnect.
+    if server.is_none() && active_iface.is_none() {
+        if let Err(e) = proxy_setter::unset_system_proxy() {
+            log::error!("Failed to unset system proxy on stop: {}", e);
+        }
+        if let Err(e) = ctx.core.stop().await {
+            log::error!("Failed to stop core: {}", e);
+        }
+        return;
+    }
+
+    if let Err(e) = ctx.core.start(server.as_ref(), tun_mode, &rules, &dr, active_iface.as_ref()).await {
+        log::error!("Failed to reconcile core after config change: {}", e);
     }
 }
