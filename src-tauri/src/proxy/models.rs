@@ -348,6 +348,24 @@ pub struct BridgeConfig {
     pub endpoints: Vec<String>,
 }
 
+/// A named, externally-managed network interface IRBox can route into.
+/// The interface itself is created/owned outside IRBox.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct InterfaceConfig {
+    /// Stable uuid (minted backend-side; empty on a new-add request).
+    pub id: String,
+    /// User-facing name, e.g. "Work AWG". Defaults to `interface` if blank.
+    pub label: String,
+    /// Bind target, e.g. "awg0". Required, non-empty.
+    pub interface: String,
+    /// Optional SO_MARK / fwmark to tag bridge egress (Linux).
+    #[serde(default)]
+    pub routing_mark: Option<u32>,
+    /// Interface server endpoint IP/CIDRs kept on `direct` (anti-loop in TUN).
+    #[serde(default)]
+    pub endpoints: Vec<String>,
+}
+
 /// App state persisted to disk
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppState {
@@ -366,10 +384,55 @@ pub struct AppState {
     #[serde(default)]
     pub bridge: BridgeConfig,
     #[serde(default)]
+    pub interfaces: Vec<InterfaceConfig>,
+    #[serde(default)]
+    pub active_interface_id: Option<String>,
+    #[serde(default)]
     pub onboarding_completed: bool,
 }
 
 fn default_route() -> String { "proxy".to_string() }
+
+impl AppState {
+    /// Resolve the active interface, treating a dangling id as none.
+    pub fn active_interface(&self) -> Option<&InterfaceConfig> {
+        let id = self.active_interface_id.as_ref()?;
+        self.interfaces.iter().find(|i| &i.id == id)
+    }
+
+    /// Dual-write: keep the legacy `bridge` field populated from the active
+    /// interface so a downgrade to v1.1.0 still finds a usable config.
+    pub fn sync_legacy_bridge(&mut self) {
+        self.bridge = match self.active_interface() {
+            Some(i) => BridgeConfig {
+                interface: Some(i.interface.clone()),
+                routing_mark: i.routing_mark,
+                endpoints: i.endpoints.clone(),
+            },
+            None => BridgeConfig::default(),
+        };
+    }
+
+    /// One-shot migration from the v1.1.0 single `bridge` field to the
+    /// interfaces list. Runs only when no interfaces exist yet and the legacy
+    /// bridge has a non-empty interface.
+    pub fn migrate_bridge_to_interfaces(&mut self) {
+        if !self.interfaces.is_empty() {
+            return;
+        }
+        if let Some(iface) = self.bridge.interface.clone().filter(|s| !s.is_empty()) {
+            let entry = InterfaceConfig {
+                id: uuid::Uuid::new_v4().to_string(),
+                label: iface.clone(),
+                interface: iface,
+                routing_mark: self.bridge.routing_mark,
+                endpoints: self.bridge.endpoints.clone(),
+            };
+            self.active_interface_id = Some(entry.id.clone());
+            self.interfaces.push(entry);
+        }
+    }
+}
 
 /// Which proxy core to use
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -417,5 +480,91 @@ mod tests {
     fn appstate_default_has_empty_bridge() {
         let s = AppState::default();
         assert!(s.bridge.interface.is_none());
+    }
+
+    #[test]
+    fn migrate_v110_bridge_creates_one_active_interface() {
+        let mut s = AppState {
+            bridge: BridgeConfig {
+                interface: Some("awg0".into()),
+                routing_mark: Some(51820),
+                endpoints: vec!["192.0.2.1/32".into()],
+            },
+            ..Default::default()
+        };
+        s.migrate_bridge_to_interfaces();
+        assert_eq!(s.interfaces.len(), 1);
+        let i = &s.interfaces[0];
+        assert_eq!(i.interface, "awg0");
+        assert_eq!(i.label, "awg0");
+        assert_eq!(i.routing_mark, Some(51820));
+        assert_eq!(i.endpoints, vec!["192.0.2.1/32".to_string()]);
+        assert_eq!(s.active_interface_id.as_deref(), Some(i.id.as_str()));
+        assert!(!i.id.is_empty());
+    }
+
+    #[test]
+    fn migrate_bridge_without_interface_creates_zero_interfaces() {
+        let mut s = AppState {
+            bridge: BridgeConfig {
+                interface: None,
+                routing_mark: Some(7),
+                endpoints: vec!["198.51.100.7".into()],
+            },
+            ..Default::default()
+        };
+        s.migrate_bridge_to_interfaces();
+        assert!(s.interfaces.is_empty());
+        assert!(s.active_interface_id.is_none());
+    }
+
+    #[test]
+    fn migrate_is_noop_when_interfaces_already_present() {
+        let mut s = AppState {
+            interfaces: vec![InterfaceConfig {
+                id: "keep".into(), label: "keep".into(), interface: "wg9".into(),
+                routing_mark: None, endpoints: vec![],
+            }],
+            bridge: BridgeConfig { interface: Some("awg0".into()), ..Default::default() },
+            ..Default::default()
+        };
+        s.migrate_bridge_to_interfaces();
+        assert_eq!(s.interfaces.len(), 1);
+        assert_eq!(s.interfaces[0].id, "keep");
+    }
+
+    #[test]
+    fn active_interface_resolves_and_dangling_is_none() {
+        let mut s = AppState {
+            interfaces: vec![InterfaceConfig {
+                id: "a".into(), label: "A".into(), interface: "awg0".into(),
+                routing_mark: None, endpoints: vec![],
+            }],
+            active_interface_id: Some("a".into()),
+            ..Default::default()
+        };
+        assert_eq!(s.active_interface().map(|i| i.id.as_str()), Some("a"));
+        s.active_interface_id = Some("ghost".into());
+        assert!(s.active_interface().is_none());
+    }
+
+    #[test]
+    fn sync_legacy_bridge_mirrors_active_else_default() {
+        let mut s = AppState {
+            interfaces: vec![InterfaceConfig {
+                id: "a".into(), label: "A".into(), interface: "awg0".into(),
+                routing_mark: Some(51820), endpoints: vec!["192.0.2.1/32".into()],
+            }],
+            active_interface_id: Some("a".into()),
+            ..Default::default()
+        };
+        s.sync_legacy_bridge();
+        assert_eq!(s.bridge.interface.as_deref(), Some("awg0"));
+        assert_eq!(s.bridge.routing_mark, Some(51820));
+        assert_eq!(s.bridge.endpoints, vec!["192.0.2.1/32".to_string()]);
+        s.active_interface_id = None;
+        s.sync_legacy_bridge();
+        assert!(s.bridge.interface.is_none());
+        assert!(s.bridge.endpoints.is_empty());
     }
 }
