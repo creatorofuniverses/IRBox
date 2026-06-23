@@ -131,6 +131,7 @@ const translations = {
   "routing.direct": { en: "Direct", ru: "Напрямую" },
   "routing.block": { en: "Block", ru: "Блокировать" },
   "routing.noRules": { en: "No routing rules yet. Add one above.", ru: "Правил пока нет. Добавьте первое выше." },
+  "routing.editRule": { en: "Edit rule", ru: "Изменить правило" },
   "routing.presets": { en: "Quick Presets", ru: "Быстрые шаблоны" },
   "routing.presetAds": { en: "Block Ads", ru: "Блокировка рекламы" },
   "routing.saved": { en: "Routing rules saved", ru: "Правила маршрутизации сохранены" },
@@ -160,6 +161,7 @@ const translations = {
   // Common
   "common.add": { en: "Add", ru: "Добавить" },
   "common.cancel": { en: "Cancel", ru: "Отмена" },
+  "common.save": { en: "Save", ru: "Сохранить" },
   "common.import": { en: "Import", ru: "Импорт" },
 
   // Toast messages
