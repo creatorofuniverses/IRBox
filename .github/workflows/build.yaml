@@ -213,9 +213,9 @@ jobs:
 
             ### Assets
             This release includes installers/packages for:
-            - Windows (x86_64 MSVC/GNU and ARM64 MSVC)
+            - Windows (x86_64 and ARM64, MSVC)
             - macOS (Intel and Apple Silicon)
-            - Linux (x86_64 and ARM64)
+            - Linux (x86_64)
 
             ### System Requirements
             - Windows 10 or later

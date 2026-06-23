@@ -70,56 +70,79 @@ As a small gift to the community, IRBox provides a **free public subscription** 
 https://raw.githubusercontent.com/frank-vpl/servers/refs/heads/main/irbox
 ```
 
-## 🛠️ Installation
+## 📥 Download
+
+If you just want to use IRBox, grab a prebuilt installer for your platform from the **[Releases page](https://github.com/creatorofuniverses/IRBox/releases)** — no toolchain or compilation required:
+
+| Platform | Files |
+|----------|-------|
+| **Windows** | `.exe` (NSIS installer) or `.msi` |
+| **macOS** | `.dmg` (Intel & Apple Silicon) |
+| **Linux** | `.AppImage`, `.deb`, or `.rpm` |
+
+> ℹ️ IRBox starts in **Proxy Mode** by default (no special permissions). **TUN Mode** routes all traffic and needs elevated privileges — use **Settings → VPN Mode → TUN → Run as Administrator**, or launch the app with `sudo` / as Administrator.
+
+## 🛠️ Build from source
+
+For development or to build the installers yourself.
 
 ### Prerequisites
-- Rust and Cargo
-- Tauri CLI
-- NodeJS and NPM 
-- Tauri prerequisites
+- **Rust and Cargo** (stable)
+- **Node.js and npm** (Node 18+)
+- **Tauri CLI v2** — `cargo install tauri-cli --version "^2"`
+- **Platform dependencies** ([Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)):
+  - **Linux:** `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`
+  - **Windows:** Microsoft C++ Build Tools + WebView2 (preinstalled on Windows 11)
+  - **macOS:** Xcode Command Line Tools
 
-### Quick Setup
+### Setup
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/frank-vpl/IRBox.git
+   git clone https://github.com/creatorofuniverses/IRBox.git
    cd IRBox
    ```
 
-2. **Install dependencies**
+2. **Install frontend dependencies**
    ```bash
    npm install
    ```
-   
-3. **Install Tauri CLI**
-   ```bash
-   cargo install tauri-cli --version ^2
-   ```
 
-4. **Download cores**
+3. **Download the proxy cores** (sing-box & xray sidecars + geoip/geosite). The target is auto-detected from `rustc`; pass one explicitly to cross-build (e.g. `./cores.sh x86_64-pc-windows-msvc`).
 
-   **Windows:**
-   ```bash
-   ./cores.bat
-   ```
-   
    **Linux/macOS:**
    ```bash
    chmod +x cores.sh
    ./cores.sh
    ```
 
-## 🚀 Usage
+   **Windows:**
+   ```bash
+   ./cores.bat
+   ```
 
-### Development
+### Run & build
+
 ```bash
+# Run in development (hot reload)
 cargo tauri dev
-```
 
-### Production
-```bash
+# Build release installers for the current platform
 cargo tauri build
 ```
+
+Built installers/packages land in `src-tauri/target/release/bundle/` (or `src-tauri/target/<target>/release/bundle/` when a `--target` is given).
+
+## 📦 Creating a release
+
+Releases are produced automatically by the [`Build` workflow](.github/workflows/build.yaml), which builds for Windows (x86_64 & ARM64), macOS (Intel & Apple Silicon), and Linux (x86_64), then publishes the installers to a GitHub Release. Trigger it by either:
+
+- **Pushing a version tag:**
+  ```bash
+  git tag v1.0.0
+  git push origin v1.0.0
+  ```
+- **Or** running the workflow manually from the **Actions** tab (*workflow_dispatch*) and entering a tag name.
 
 ## 🤝 Contributing
 
