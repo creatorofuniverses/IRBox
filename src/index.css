@@ -160,6 +160,7 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
+  margin-left: 4px;
   margin-right: 6px;
   flex-shrink: 0;
   vertical-align: middle;
@@ -167,7 +168,9 @@ body {
 }
 .iface-status-up {
   background: var(--success);
-  box-shadow: 0 0 6px var(--success);
+  /* Keep the glow within the 4px left inset so the ellipsis container
+     (overflow: hidden) doesn't clip the left of the bulb. */
+  box-shadow: 0 0 4px var(--success);
 }
 .iface-status-down {
   background: var(--danger);
@@ -602,6 +605,7 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  margin-left: 8px;
   margin-right: 8px;
   background: var(--accent);
   color: white;
