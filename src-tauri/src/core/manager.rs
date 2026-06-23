@@ -113,7 +113,7 @@ impl CoreManager {
         *self.http_port.lock().await
     }
 
-    pub async fn start(&self, server: &Server, tun_mode: bool, routing_rules: &[RoutingRule], default_route: &str, bridge: &BridgeConfig) -> Result<()> {
+    pub async fn start(&self, server: &Server, tun_mode: bool, routing_rules: &[RoutingRule], default_route: &str, active_interface: Option<&InterfaceConfig>) -> Result<()> {
         self.stop().await?;
 
         let core_type = self.core_type.lock().await.clone();
@@ -340,7 +340,7 @@ impl CoreManager {
             }
         } else {
             let config = match core_type {
-                CoreType::SingBox => singbox::generate_config(server, socks_port, http_port, tun_mode, routing_rules, default_route, bridge)?,
+                CoreType::SingBox => singbox::generate_config(server, socks_port, http_port, tun_mode, routing_rules, default_route, active_interface)?,
                 CoreType::Xray => xray::generate_config(server, socks_port, http_port, routing_rules, default_route)?,
             };
             

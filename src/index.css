@@ -1457,6 +1457,27 @@ input[type="number"] {
 .routing-rule-delete:hover {
   color: var(--danger);
 }
+.routing-rule-edit {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+  opacity: 0;
+  transition: all 0.15s;
+}
+.routing-rule-card:hover .routing-rule-edit {
+  opacity: 1;
+}
+.routing-rule-edit:hover {
+  color: var(--accent);
+}
+.routing-rule-edit-input {
+  flex: 1;
+  font-family: 'Consolas', 'Fira Code', monospace;
+  font-size: 13px;
+}
 
 /* ══════════════════════════════════════════════
    STYLE VARIANTS

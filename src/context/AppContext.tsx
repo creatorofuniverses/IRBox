@@ -6,13 +6,13 @@ import {
   SubscriptionInfo,
   Settings,
   RoutingRule,
-  BridgeConfig,
+  InterfaceConfig,
 } from "../api/tauri";
 import { setLang, Lang } from "../i18n/translations";
 
 // ── State ──────────────────────────────────────
 
-export type Page = "home" | "subscriptions" | "settings" | "logs" | "stats" | "routing";
+export type Page = "home" | "subscriptions" | "interfaces" | "settings" | "logs" | "stats" | "routing";
 
 export interface AppState {
   page: Page;
@@ -28,7 +28,8 @@ export interface AppState {
   settings: Settings;
   routingRules: RoutingRule[];
   defaultRoute: string;
-  bridge: BridgeConfig;
+  interfaces: InterfaceConfig[];
+  activeInterfaceId: string | null;
   toasts: Toast[];
   langTick: number; // bumped to force re-render on language change
   speedHistory: number[]; // last 60 download speed samples for sparkline
@@ -68,7 +69,8 @@ const initialState: AppState = {
   settings: defaultSettings,
   routingRules: [],
   defaultRoute: "proxy",
-  bridge: { interface: null, routing_mark: null, endpoints: [] },
+  interfaces: [],
+  activeInterfaceId: null,
   toasts: [],
   langTick: 0,
   speedHistory: [],
@@ -91,7 +93,8 @@ type Action =
   | { type: "REMOVE_TOAST"; id: number }
   | { type: "BUMP_LANG" }
   | { type: "PUSH_SPEED"; speed: number }
-  | { type: "SET_ROUTING_RULES"; rules: RoutingRule[]; defaultRoute: string; bridge: BridgeConfig }
+  | { type: "SET_ROUTING_RULES"; rules: RoutingRule[]; defaultRoute: string }
+  | { type: "SET_INTERFACES"; interfaces: InterfaceConfig[]; activeInterfaceId: string | null }
   | { type: "SET_ONBOARDING_COMPLETED"; completed: boolean };
 
 let toastId = 0;
@@ -167,7 +170,9 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, speedHistory: hist.slice(-60) };
     }
     case "SET_ROUTING_RULES":
-      return { ...state, routingRules: action.rules, defaultRoute: action.defaultRoute, bridge: action.bridge };
+      return { ...state, routingRules: action.rules, defaultRoute: action.defaultRoute };
+    case "SET_INTERFACES":
+      return { ...state, interfaces: action.interfaces, activeInterfaceId: action.activeInterfaceId };
     case "SET_ONBOARDING_COMPLETED":
       return { ...state, onboardingCompleted: action.completed };
     default:
@@ -212,19 +217,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const [servers, status, settings, subs, routing, onboardingDone] = await Promise.all([
+        const [servers, status, settings, subs, routing, interfaces, onboardingDone] = await Promise.all([
           api.getServers(),
           api.getStatus(),
           api.getSettings(),
           api.getSubscriptions(),
           api.getRoutingRules(),
+          api.getInterfaces(),
           api.getOnboardingCompleted(),
         ]);
         dispatch({ type: "SET_SERVERS", servers });
         dispatch({ type: "SET_STATUS", status });
         dispatch({ type: "SET_SETTINGS", settings });
         dispatch({ type: "SET_SUBSCRIPTIONS", subs });
-        dispatch({ type: "SET_ROUTING_RULES", rules: routing.rules, defaultRoute: routing.default_route, bridge: routing.bridge });
+        dispatch({ type: "SET_ROUTING_RULES", rules: routing.rules, defaultRoute: routing.default_route });
+        dispatch({ type: "SET_INTERFACES", interfaces: interfaces.interfaces, activeInterfaceId: interfaces.active_interface_id });
         dispatch({ type: "SET_ONBOARDING_COMPLETED", completed: onboardingDone });
         setLang(settings.language as Lang);
       } catch (e) {

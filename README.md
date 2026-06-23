@@ -48,18 +48,23 @@ Designed for privacy-conscious users, IRBox offers multi-protocol support, advan
 
 ## 🔀 Custom Interface Routing
 
-IRBox can route selected domains **into a network interface that you bring up and manage yourself** — for example a WireGuard/AmneziaWG tunnel created with `table = off`. IRBox does **not** create or tear down the interface; it only directs matching traffic into it via sing-box. This is sing-box only (with the Xray core, the `interface` action falls back to `proxy`).
+Route selected domains into an externally-managed network interface (e.g. a
+WireGuard/AmneziaWG tunnel brought up with `table = off`). IRBox never creates
+or tears down the interface — it only routes into it.
 
-**How to use it:**
-
-1. Bring up your interface outside IRBox (e.g. `awg0` / `wg0`). On Linux, configure it with `table = off` and its own firewall mark so the OS does not route everything into it automatically.
-2. In IRBox, open the **Routing** page and find the **Custom interface routing** section:
-   - **Interface name** — the interface to bind to, e.g. `awg0`.
-   - **Endpoint IPs to exclude** — the tunnel server IP(s), comma-separated. In TUN mode these are kept on a direct route so the tunnel's own handshake is not captured back into sing-box (which would otherwise create a routing loop).
-   - **Firewall mark (fwmark)** — optional `SO_MARK` to tag the bridged traffic (Linux), matching your interface's mark.
-3. Add a routing rule (or edit an existing one) and set its action to **Interface**. Matching domains are now routed into your interface. If no interface name is set, the action safely falls back to `proxy`.
-
-> **Platform note:** solid on **Linux**; binding works on Windows/macOS too, but managing a `table = off` interface there is your responsibility (best-effort).
+1. Open the **Interfaces** page (sidebar) and **Add interface**:
+   - **Interface name** — the bind target, e.g. `awg0` (required).
+   - **Label** — a friendly name (defaults to the interface name).
+   - **Endpoint IPs to exclude** — the tunnel server's IP/CIDRs, kept on
+     `direct` to avoid a routing loop in TUN mode.
+   - **Firewall mark (fwmark)** — optional SO_MARK for the interface egress.
+2. Click **Use** on the interface to mark it **active**. Only the active
+   interface receives traffic.
+3. On the **Routing** page, add rules with the **Interface** action for the
+   domains you want to send into that interface.
+4. Connect. Matching domains egress via the active interface; everything else
+   follows your default route. If a rule uses **Interface** but nothing is
+   active, the Routing page shows a hint and the rule falls back to proxy.
 
 ## 🎁 Gift: Free Xray / sing-box Configs
 

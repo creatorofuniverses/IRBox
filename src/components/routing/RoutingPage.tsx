@@ -1,8 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useApp } from "../../context/AppContext";
-import { api, RoutingRule, RuleAction, BridgeConfig } from "../../api/tauri";
+import { api, RoutingRule, RuleAction } from "../../api/tauri";
 import { t } from "../../i18n/translations";
-import { getLang } from "../../i18n/translations";
 
 export interface Preset {
   id: string;
@@ -44,6 +43,9 @@ export function RoutingPage() {
   const [newDomain, setNewDomain] = useState("");
   const [newAction, setNewAction] = useState<RuleAction>("direct");
   const [presets, setPresets] = useState<Preset[]>(FALLBACK_PRESETS);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDomain, setEditDomain] = useState("");
+  const [editAction, setEditAction] = useState<RuleAction>("direct");
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -63,12 +65,12 @@ export function RoutingPage() {
   }, []);
 
   const save = useCallback(
-    (rules: RoutingRule[], defaultRoute: string, bridge: BridgeConfig) => {
-      dispatch({ type: "SET_ROUTING_RULES", rules, defaultRoute, bridge });
+    (rules: RoutingRule[], defaultRoute: string) => {
+      dispatch({ type: "SET_ROUTING_RULES", rules, defaultRoute });
       clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(async () => {
         try {
-          await api.saveRoutingRules(rules, defaultRoute, bridge);
+          await api.saveRoutingRules(rules, defaultRoute);
           toast(t("routing.saved"), "success");
         } catch (e) {
           toast(`${e}`, "error");
@@ -79,7 +81,7 @@ export function RoutingPage() {
   );
 
   const setDefaultRoute = (route: string) => {
-    save(state.routingRules, route, state.bridge);
+    save(state.routingRules, route);
   };
 
   const addRule = () => {
@@ -95,15 +97,14 @@ export function RoutingPage() {
       action: newAction,
       enabled: true,
     };
-    save([...state.routingRules, rule], state.defaultRoute, state.bridge);
+    save([...state.routingRules, rule], state.defaultRoute);
     setNewDomain("");
   };
 
   const removeRule = (id: string) => {
     save(
       state.routingRules.filter((r) => r.id !== id),
-      state.defaultRoute,
-      state.bridge
+      state.defaultRoute
     );
   };
 
@@ -112,9 +113,35 @@ export function RoutingPage() {
       state.routingRules.map((r) =>
         r.id === id ? { ...r, enabled: !r.enabled } : r
       ),
-      state.defaultRoute,
-      state.bridge
+      state.defaultRoute
     );
+  };
+
+  const startEdit = (rule: RoutingRule) => {
+    setEditingId(rule.id);
+    setEditDomain(rule.domain);
+    setEditAction(rule.action);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const saveEdit = () => {
+    if (!editingId) return;
+    const domain = editDomain.trim().toLowerCase();
+    if (!domain) return;
+    if (state.routingRules.some((r) => r.id !== editingId && r.domain === domain)) {
+      toast(`Rule for ${domain} already exists`, "error");
+      return;
+    }
+    save(
+      state.routingRules.map((r) =>
+        r.id === editingId ? { ...r, domain, action: editAction } : r
+      ),
+      state.defaultRoute
+    );
+    setEditingId(null);
   };
 
   const addPreset = (domains: string[], action: RuleAction) => {
@@ -131,7 +158,7 @@ export function RoutingPage() {
       toast("All preset domains already added", "info");
       return;
     }
-    save([...state.routingRules, ...newRules], state.defaultRoute, state.bridge);
+    save([...state.routingRules, ...newRules], state.defaultRoute);
   };
 
   const actionColor = (action: RuleAction) => {
@@ -147,13 +174,9 @@ export function RoutingPage() {
     }
   };
 
-  const parseEndpoints = (raw: string): string[] =>
-    raw.split(/[\s,]+/).map((s) => s.trim()).filter((s) => s.length > 0);
-
-  const setBridge = (patch: Partial<BridgeConfig>) =>
-    save(state.routingRules, state.defaultRoute, { ...state.bridge, ...patch });
-
-  const lang = getLang();
+  const needsActiveIface =
+    state.activeInterfaceId === null &&
+    state.routingRules.some((r) => r.enabled && r.action === "bridge");
 
   return (
     <div className="routing-page">
@@ -193,44 +216,6 @@ export function RoutingPage() {
               <span className="vpn-mode-desc">{t("routing.directAllDesc")}</span>
             </div>
           </label>
-        </div>
-      </div>
-
-      {/* Bridge / Custom interface routing settings */}
-      <div className="settings-section">
-        <div className="settings-label">{t("routing.bridgeSettings")}</div>
-        <div className="vpn-mode-desc">{t("routing.bridgeHelp")}</div>
-        <div className="form-group">
-          <label className="form-label">{t("routing.bridgeInterface")}</label>
-          <input
-            className="form-input"
-            type="text"
-            placeholder={t("routing.bridgeInterfacePlaceholder")}
-            value={state.bridge.interface ?? ""}
-            onChange={(e) => setBridge({ interface: e.target.value.trim() || null })}
-          />
-        </div>
-        <div className="form-group">
-          <label className="form-label">{t("routing.bridgeEndpoints")}</label>
-          <input
-            className="form-input"
-            type="text"
-            placeholder={t("routing.bridgeEndpointsPlaceholder")}
-            value={state.bridge.endpoints.join(", ")}
-            onChange={(e) => setBridge({ endpoints: parseEndpoints(e.target.value) })}
-          />
-        </div>
-        <div className="form-group">
-          <label className="form-label">{t("routing.bridgeMark")}</label>
-          <input
-            className="form-input"
-            type="number"
-            placeholder={t("routing.bridgeMarkPlaceholder")}
-            value={state.bridge.routing_mark ?? ""}
-            onChange={(e) =>
-              setBridge({ routing_mark: e.target.value === "" ? null : Number(e.target.value) })
-            }
-          />
         </div>
       </div>
 
@@ -283,42 +268,90 @@ export function RoutingPage() {
         <div className="settings-label">
           {t("routing.rules")} ({state.routingRules.length})
         </div>
+        {needsActiveIface && (
+          <div
+            className="vpn-mode-desc"
+            style={{ cursor: "pointer", color: "var(--warning)" }}
+            onClick={() => dispatch({ type: "SET_PAGE", page: "interfaces" })}
+          >
+            {t("interfaces.noActiveHint")}
+          </div>
+        )}
         {state.routingRules.length === 0 ? (
           <div className="empty-list">{t("routing.noRules")}</div>
         ) : (
           <div className="routing-rules-list">
-            {state.routingRules.map((rule) => (
-              <div
-                key={rule.id}
-                className={`routing-rule-card ${!rule.enabled ? "disabled" : ""}`}
-              >
-                <span
-                  className="routing-action-badge"
-                  style={{
-                    background: `color-mix(in srgb, ${actionColor(rule.action)} 15%, transparent)`,
-                    color: actionColor(rule.action),
-                    borderColor: `color-mix(in srgb, ${actionColor(rule.action)} 30%, transparent)`,
-                  }}
-                >
-                  {rule.action}
-                </span>
-                <span className="routing-rule-domain">{rule.domain}</span>
-                <label className="toggle routing-rule-toggle">
+            {state.routingRules.map((rule) =>
+              editingId === rule.id ? (
+                <div key={rule.id} className="routing-rule-card editing">
+                  <select
+                    className="sort-select routing-action-select"
+                    value={editAction}
+                    onChange={(e) => setEditAction(e.target.value as RuleAction)}
+                  >
+                    <option value="direct">{t("routing.direct")}</option>
+                    <option value="proxy">{t("routing.proxy")}</option>
+                    <option value="block">{t("routing.block")}</option>
+                    <option value="bridge">{t("routing.bridge")}</option>
+                  </select>
                   <input
-                    type="checkbox"
-                    checked={rule.enabled}
-                    onChange={() => toggleRule(rule.id)}
+                    className="form-input routing-rule-edit-input"
+                    type="text"
+                    value={editDomain}
+                    onChange={(e) => setEditDomain(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveEdit();
+                      if (e.key === "Escape") cancelEdit();
+                    }}
+                    autoFocus
                   />
-                  <span className="toggle-slider" />
-                </label>
-                <button
-                  className="routing-rule-delete"
-                  onClick={() => removeRule(rule.id)}
+                  <button className="btn btn-primary btn-sm" onClick={saveEdit}>
+                    {t("common.save")}
+                  </button>
+                  <button className="btn btn-secondary btn-sm" onClick={cancelEdit}>
+                    {t("common.cancel")}
+                  </button>
+                </div>
+              ) : (
+                <div
+                  key={rule.id}
+                  className={`routing-rule-card ${!rule.enabled ? "disabled" : ""}`}
                 >
-                  x
-                </button>
-              </div>
-            ))}
+                  <span
+                    className="routing-action-badge"
+                    style={{
+                      background: `color-mix(in srgb, ${actionColor(rule.action)} 15%, transparent)`,
+                      color: actionColor(rule.action),
+                      borderColor: `color-mix(in srgb, ${actionColor(rule.action)} 30%, transparent)`,
+                    }}
+                  >
+                    {rule.action}
+                  </span>
+                  <span className="routing-rule-domain">{rule.domain}</span>
+                  <label className="toggle routing-rule-toggle">
+                    <input
+                      type="checkbox"
+                      checked={rule.enabled}
+                      onChange={() => toggleRule(rule.id)}
+                    />
+                    <span className="toggle-slider" />
+                  </label>
+                  <button
+                    className="routing-rule-edit"
+                    title={t("routing.editRule")}
+                    onClick={() => startEdit(rule)}
+                  >
+                    ✎
+                  </button>
+                  <button
+                    className="routing-rule-delete"
+                    onClick={() => removeRule(rule.id)}
+                  >
+                    x
+                  </button>
+                </div>
+              )
+            )}
           </div>
         )}
       </div>

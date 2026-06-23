@@ -4,6 +4,7 @@ const translations = {
   // Navigation
   "nav.home": { en: "Home" },
   "nav.subscriptions": { en: "Subscriptions" },
+  "nav.interfaces": { en: "Interfaces" },
   "nav.stats": { en: "Statistics" },
   "nav.logs": { en: "Logs" },
   "nav.routing": { en: "Routing" },
@@ -131,6 +132,7 @@ const translations = {
   "routing.direct": { en: "Direct", ru: "Напрямую" },
   "routing.block": { en: "Block", ru: "Блокировать" },
   "routing.noRules": { en: "No routing rules yet. Add one above.", ru: "Правил пока нет. Добавьте первое выше." },
+  "routing.editRule": { en: "Edit rule", ru: "Изменить правило" },
   "routing.presets": { en: "Quick Presets", ru: "Быстрые шаблоны" },
   "routing.presetAds": { en: "Block Ads", ru: "Блокировка рекламы" },
   "routing.saved": { en: "Routing rules saved", ru: "Правила маршрутизации сохранены" },
@@ -143,6 +145,27 @@ const translations = {
   "routing.bridgeMark": { en: "Firewall mark (fwmark)" },
   "routing.bridgeMarkPlaceholder": { en: "optional, e.g. 51820" },
   "routing.bridgeHelp": { en: "Route the \"Interface\" action into an externally-managed network interface (e.g. a WireGuard/AmneziaWG tunnel). IRBox does not create the interface." },
+
+  // Interfaces page
+  "interfaces.title": { en: "Custom Interfaces" },
+  "interfaces.add": { en: "Add interface" },
+  "interfaces.addTitle": { en: "Add interface" },
+  "interfaces.editTitle": { en: "Edit interface" },
+  "interfaces.empty": { en: "No custom interfaces yet. Add one to route the \"Interface\" action into an external tunnel." },
+  "interfaces.use": { en: "Use" },
+  "interfaces.active": { en: "Active" },
+  "interfaces.labelField": { en: "Label" },
+  "interfaces.labelPlaceholder": { en: "e.g. Work AWG (defaults to the interface name)" },
+  "interfaces.interfaceField": { en: "Interface name" },
+  "interfaces.interfacePlaceholder": { en: "e.g. awg0" },
+  "interfaces.endpointsField": { en: "Endpoint IPs to exclude (anti-loop)" },
+  "interfaces.endpointsPlaceholder": { en: "comma-separated, e.g. 192.0.2.1, 198.51.100.7" },
+  "interfaces.markField": { en: "Firewall mark (fwmark)" },
+  "interfaces.markPlaceholder": { en: "optional, e.g. 51820" },
+  "interfaces.errInterfaceRequired": { en: "Interface name is required" },
+  "interfaces.errInterfaceFormat": { en: "Interface name must have no spaces" },
+  "interfaces.errEndpoint": { en: "Invalid endpoint (use IP or CIDR)" },
+  "interfaces.noActiveHint": { en: "A rule uses the \"Interface\" action but no interface is active. Open Interfaces to activate one." },
 
   // Onboarding
   "onboarding.welcome": { en: "Welcome to IRBox!", ru: "Добро пожаловать в IRBox!" },
@@ -160,7 +183,10 @@ const translations = {
   // Common
   "common.add": { en: "Add", ru: "Добавить" },
   "common.cancel": { en: "Cancel", ru: "Отмена" },
+  "common.save": { en: "Save", ru: "Сохранить" },
   "common.import": { en: "Import", ru: "Импорт" },
+  "common.edit": { en: "Edit" },
+  "common.delete": { en: "Delete" },
 
   // Toast messages
   "toast.disconnected": { en: "Disconnected", ru: "Отключено" },

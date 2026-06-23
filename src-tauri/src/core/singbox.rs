@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use crate::proxy::models::*;
 
 /// Generate a sing-box config for connecting to a single server
-pub fn generate_config(server: &Server, socks_port: u16, http_port: u16, tun_mode: bool, routing_rules: &[RoutingRule], default_route: &str, bridge: &BridgeConfig) -> Result<Value> {
+pub fn generate_config(server: &Server, socks_port: u16, http_port: u16, tun_mode: bool, routing_rules: &[RoutingRule], default_route: &str, active_interface: Option<&InterfaceConfig>) -> Result<Value> {
     let outbound = build_outbound(server)?;
     
     // Handle WireGuard endpoints separately
@@ -187,8 +187,10 @@ pub fn generate_config(server: &Server, socks_port: u16, http_port: u16, tun_mod
     // Anti-loop guard: keep the external tunnel's own endpoint traffic on
     // `direct` so its handshake/data is not captured back into sing-box (TUN).
     // Must precede user rules (first match wins).
-    if bridge.interface.is_some() && !bridge.endpoints.is_empty() {
-        route_rules.push(json!({ "ip_cidr": bridge.endpoints, "outbound": "direct" }));
+    if let Some(iface) = active_interface {
+        if !iface.endpoints.is_empty() {
+            route_rules.push(json!({ "ip_cidr": iface.endpoints, "outbound": "direct" }));
+        }
     }
 
     // User-defined routing rules
@@ -205,8 +207,9 @@ pub fn generate_config(server: &Server, socks_port: u16, http_port: u16, tun_mod
                 route_rules.push(json!({ "domain_suffix": [domain], "outbound": "proxy" }));
             }
             RuleAction::Bridge => {
-                // Falls back to `proxy` if no bridge interface is configured.
-                let outbound = if bridge.interface.is_some() { "bridge" } else { "proxy" };
+                // Routes into the active interface's bridge outbound; falls back
+                // to `proxy` when no interface is active.
+                let outbound = if active_interface.is_some() { "bridge" } else { "proxy" };
                 route_rules.push(json!({ "domain_suffix": [domain], "outbound": outbound }));
             }
         }
@@ -218,13 +221,13 @@ pub fn generate_config(server: &Server, socks_port: u16, http_port: u16, tun_mod
         outbound,
         json!({ "type": "direct", "tag": "direct" }),
     ];
-    if let Some(ref iface) = bridge.interface {
+    if let Some(iface) = active_interface {
         let mut bridge_out = json!({
             "type": "direct",
             "tag": "bridge",
-            "bind_interface": iface,
+            "bind_interface": iface.interface,
         });
-        if let Some(mark) = bridge.routing_mark {
+        if let Some(mark) = iface.routing_mark {
             bridge_out["routing_mark"] = json!(mark);
         }
         outbounds.push(bridge_out);
@@ -283,19 +286,23 @@ mod tests {
             .filter_map(|o| o["tag"].as_str().map(|s| s.to_string())).collect()
     }
 
+    fn iface(name: &str, mark: Option<u32>, endpoints: Vec<String>) -> InterfaceConfig {
+        InterfaceConfig {
+            id: "i".into(), label: name.into(), interface: name.into(),
+            routing_mark: mark, endpoints,
+        }
+    }
+
     #[test]
-    fn no_bridge_outbound_when_interface_unset() {
-        let cfg = generate_config(&test_server(), 1080, 1081, false, &[], "proxy",
-            &BridgeConfig::default()).unwrap();
+    fn no_bridge_outbound_when_no_active_interface() {
+        let cfg = generate_config(&test_server(), 1080, 1081, false, &[], "proxy", None).unwrap();
         assert!(!outbound_tags(&cfg).contains(&"bridge".to_string()));
     }
 
     #[test]
     fn bridge_outbound_emitted_with_bind_interface_and_mark() {
-        let bridge = BridgeConfig {
-            interface: Some("awg0".into()), routing_mark: Some(51820), endpoints: vec![],
-        };
-        let cfg = generate_config(&test_server(), 1080, 1081, false, &[], "proxy", &bridge).unwrap();
+        let i = iface("awg0", Some(51820), vec![]);
+        let cfg = generate_config(&test_server(), 1080, 1081, false, &[], "proxy", Some(&i)).unwrap();
         let out = cfg["outbounds"].as_array().unwrap().iter()
             .find(|o| o["tag"] == "bridge").expect("bridge outbound present");
         assert_eq!(out["type"], "direct");
@@ -305,64 +312,54 @@ mod tests {
 
     #[test]
     fn bridge_outbound_omits_mark_when_unset() {
-        let bridge = BridgeConfig { interface: Some("awg0".into()), routing_mark: None, endpoints: vec![] };
-        let cfg = generate_config(&test_server(), 1080, 1081, false, &[], "proxy", &bridge).unwrap();
+        let i = iface("awg0", None, vec![]);
+        let cfg = generate_config(&test_server(), 1080, 1081, false, &[], "proxy", Some(&i)).unwrap();
         let out = cfg["outbounds"].as_array().unwrap().iter()
-            .find(|o| o["tag"] == "bridge").unwrap();
+            .find(|o| o["tag"] == "bridge").expect("bridge outbound present");
         assert!(out.get("routing_mark").is_none());
     }
 
     #[test]
     fn antiloop_rule_precedes_user_rules() {
-        let bridge = BridgeConfig {
-            interface: Some("awg0".into()), routing_mark: None,
-            endpoints: vec!["192.0.2.1/32".into(), "198.51.100.7".into()],
-        };
+        let i = iface("awg0", None, vec!["192.0.2.1/32".into(), "198.51.100.7".into()]);
         let rules = vec![RoutingRule {
-            id: "r1".into(), domain: "example.com".into(),
-            action: RuleAction::Direct, enabled: true,
+            id: "r".into(), domain: "example.com".into(), action: RuleAction::Bridge, enabled: true,
         }];
-        let cfg = generate_config(&test_server(), 1080, 1081, false, &rules, "proxy", &bridge).unwrap();
+        let cfg = generate_config(&test_server(), 1080, 1081, false, &rules, "proxy", Some(&i)).unwrap();
         let route_rules = cfg["route"]["rules"].as_array().unwrap();
-        let antiloop_idx = route_rules.iter().position(|r| r["ip_cidr"][0] == "192.0.2.1/32");
-        let user_idx = route_rules.iter().position(|r| r["domain_suffix"][0] == "example.com");
-        assert!(antiloop_idx.is_some(), "anti-loop rule present");
-        assert!(user_idx.is_some(), "user rule present");
-        assert!(antiloop_idx.unwrap() < user_idx.unwrap(), "anti-loop must precede user rules");
+        let antiloop_idx = route_rules.iter().position(|r| r.get("ip_cidr").is_some()).unwrap();
+        let user_idx = route_rules.iter().position(|r| r.get("domain_suffix").is_some()).unwrap();
+        assert!(antiloop_idx < user_idx);
     }
 
     #[test]
     fn no_antiloop_rule_when_endpoints_empty() {
-        let bridge = BridgeConfig { interface: Some("awg0".into()), routing_mark: None, endpoints: vec![] };
-        let cfg = generate_config(&test_server(), 1080, 1081, false, &[], "proxy", &bridge).unwrap();
+        let i = iface("awg0", None, vec![]);
+        let cfg = generate_config(&test_server(), 1080, 1081, false, &[], "proxy", Some(&i)).unwrap();
         let route_rules = cfg["route"]["rules"].as_array().unwrap();
-        assert!(
-            !route_rules.iter().any(|r| r["ip_cidr"].is_array() && r["outbound"] == "direct"),
-            "no anti-loop ip_cidr->direct rule should be emitted when endpoints is empty"
-        );
+        assert!(!route_rules.iter().any(|r| r.get("ip_cidr").is_some() && r["outbound"] == "direct"));
     }
 
     #[test]
-    fn bridge_rule_routes_to_bridge_when_iface_set() {
-        let bridge = BridgeConfig { interface: Some("awg0".into()), routing_mark: None, endpoints: vec![] };
+    fn bridge_rule_routes_to_bridge_when_active() {
+        let i = iface("awg0", None, vec![]);
         let rules = vec![RoutingRule {
             id: "r".into(), domain: "example.com".into(), action: RuleAction::Bridge, enabled: true,
         }];
-        let cfg = generate_config(&test_server(), 1080, 1081, false, &rules, "proxy", &bridge).unwrap();
+        let cfg = generate_config(&test_server(), 1080, 1081, false, &rules, "proxy", Some(&i)).unwrap();
         let rule = cfg["route"]["rules"].as_array().unwrap().iter()
-            .find(|r| r["domain_suffix"][0] == "example.com").unwrap();
+            .find(|r| r.get("domain_suffix").is_some()).unwrap();
         assert_eq!(rule["outbound"], "bridge");
     }
 
     #[test]
-    fn bridge_rule_falls_back_to_proxy_when_iface_unset() {
+    fn bridge_rule_falls_back_to_proxy_when_no_active() {
         let rules = vec![RoutingRule {
             id: "r".into(), domain: "example.com".into(), action: RuleAction::Bridge, enabled: true,
         }];
-        let cfg = generate_config(&test_server(), 1080, 1081, false, &rules, "proxy",
-            &BridgeConfig::default()).unwrap();
+        let cfg = generate_config(&test_server(), 1080, 1081, false, &rules, "proxy", None).unwrap();
         let rule = cfg["route"]["rules"].as_array().unwrap().iter()
-            .find(|r| r["domain_suffix"][0] == "example.com").unwrap();
+            .find(|r| r.get("domain_suffix").is_some()).unwrap();
         assert_eq!(rule["outbound"], "proxy");
     }
 }

@@ -153,10 +153,10 @@ pub async fn connect(ctx: State<'_, AppContext>, server_id: String) -> Result<St
     let tun_mode = state.settings.vpn_mode == "tun";
     let routing_rules = state.routing_rules.clone();
     let default_route = state.default_route.clone();
-    let bridge = state.bridge.clone();
+    let active_iface = state.active_interface().cloned();
 
     ctx.core
-        .start(&server, tun_mode, &routing_rules, &default_route, &bridge)
+        .start(&server, tun_mode, &routing_rules, &default_route, active_iface.as_ref())
         .await
         .map_err(|e| format!("Failed to start core: {}", e))?;
 
@@ -289,9 +289,9 @@ pub async fn set_core_type(ctx: State<'_, AppContext>, core: String) -> Result<S
                 let tun_mode = state.settings.vpn_mode == "tun";
                 let rules = state.routing_rules.clone();
                 let dr = state.default_route.clone();
-                let bridge = state.bridge.clone();
+                let active_iface = state.active_interface().cloned();
                 drop(state);
-                ctx.core.start(&s, tun_mode, &rules, &dr, &bridge).await.map_err(|e| e.to_string())?;
+                ctx.core.start(&s, tun_mode, &rules, &dr, active_iface.as_ref()).await.map_err(|e| e.to_string())?;
             }
         }
     }
@@ -544,10 +544,10 @@ pub async fn save_settings(ctx: State<'_, AppContext>, settings: Settings) -> Re
                     let tun_mode = state.settings.vpn_mode == "tun";
                     let rules = state.routing_rules.clone();
                     let dr = state.default_route.clone();
-                    let bridge = state.bridge.clone();
+                    let active_iface = state.active_interface().cloned();
                     drop(state);
                     // Reconnect with new ports
-                    if let Err(e) = ctx.core.start(&s, tun_mode, &rules, &dr, &bridge).await {
+                    if let Err(e) = ctx.core.start(&s, tun_mode, &rules, &dr, active_iface.as_ref()).await {
                         log::error!("Failed to reconnect with new ports: {}", e);
                     }
                     // Update system proxy with new HTTP port (only in proxy mode)
@@ -666,7 +666,6 @@ fn state_path() -> std::path::PathBuf {
 pub struct RoutingRulesResponse {
     pub rules: Vec<RoutingRule>,
     pub default_route: String,
-    pub bridge: BridgeConfig,
 }
 
 #[tauri::command]
@@ -675,7 +674,6 @@ pub async fn get_routing_rules(ctx: State<'_, AppContext>) -> Result<RoutingRule
     Ok(RoutingRulesResponse {
         rules: state.routing_rules.clone(),
         default_route: state.default_route.clone(),
-        bridge: state.bridge.clone(),
     })
 }
 
@@ -683,32 +681,77 @@ pub async fn get_routing_rules(ctx: State<'_, AppContext>) -> Result<RoutingRule
 pub async fn save_routing_rules(
     rules: Vec<RoutingRule>,
     default_route: String,
-    bridge: BridgeConfig,
     ctx: State<'_, AppContext>,
 ) -> Result<(), String> {
     let mut state = ctx.state.lock().await;
     state.routing_rules = rules;
     state.default_route = default_route;
-    state.bridge = bridge;
     save_state(&state);
+    drop(state);
 
-    // If connected, reconnect to apply new rules
-    if ctx.core.is_running().await {
-        if let Some(id) = &state.active_server_id {
-            if let Some(server) = state.servers.iter().find(|s| &s.id == id) {
-                let s = server.clone();
-                let tun_mode = state.settings.vpn_mode == "tun";
-                let rules = state.routing_rules.clone();
-                let dr = state.default_route.clone();
-                let bridge = state.bridge.clone();
-                drop(state);
-                if let Err(e) = ctx.core.start(&s, tun_mode, &rules, &dr, &bridge).await {
-                    log::error!("Failed to reconnect with new routing rules: {}", e);
-                }
-            }
-        }
+    // Routing rules always affect the running config — reconnect if live.
+    reconnect_active(&ctx).await;
+    Ok(())
+}
+
+#[derive(Serialize)]
+pub struct InterfacesResponse {
+    pub interfaces: Vec<InterfaceConfig>,
+    pub active_interface_id: Option<String>,
+}
+
+#[tauri::command]
+pub async fn get_interfaces(ctx: State<'_, AppContext>) -> Result<InterfacesResponse, String> {
+    let state = ctx.state.lock().await;
+    Ok(InterfacesResponse {
+        interfaces: state.interfaces.clone(),
+        active_interface_id: state.active_interface_id.clone(),
+    })
+}
+
+#[tauri::command]
+pub async fn save_interface(ctx: State<'_, AppContext>, config: InterfaceConfig) -> Result<(), String> {
+    if config.interface.trim().is_empty() {
+        return Err("Interface name is required".into());
     }
+    let touched_active;
+    {
+        let mut state = ctx.state.lock().await;
+        touched_active = state.upsert_interface(config);
+        state.sync_legacy_bridge();
+        save_state(&state);
+    }
+    if touched_active {
+        reconnect_active(&ctx).await;
+    }
+    Ok(())
+}
 
+#[tauri::command]
+pub async fn delete_interface(ctx: State<'_, AppContext>, id: String) -> Result<(), String> {
+    let was_active;
+    {
+        let mut state = ctx.state.lock().await;
+        was_active = state.delete_interface(&id);
+        state.sync_legacy_bridge();
+        save_state(&state);
+    }
+    if was_active {
+        reconnect_active(&ctx).await;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_active_interface(ctx: State<'_, AppContext>, id: Option<String>) -> Result<(), String> {
+    {
+        let mut state = ctx.state.lock().await;
+        state.set_active(id);
+        state.sync_legacy_bridge();
+        save_state(&state);
+    }
+    // The active selection changed — always reconnect a live core.
+    reconnect_active(&ctx).await;
     Ok(())
 }
 
@@ -821,14 +864,17 @@ pub fn restart_as_admin(app_handle: tauri::AppHandle) -> Result<(), String> {
 
 pub fn load_state() -> AppState {
     let path = state_path();
-    if path.exists() {
+    let mut state = if path.exists() {
         match std::fs::read_to_string(&path) {
             Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
             Err(_) => AppState::default(),
         }
     } else {
         AppState::default()
-    }
+    };
+    state.migrate_bridge_to_interfaces();
+    state.sync_legacy_bridge();
+    state
 }
 
 fn save_state(state: &AppState) {
@@ -838,5 +884,25 @@ fn save_state(state: &AppState) {
     }
     if let Ok(content) = serde_json::to_string_pretty(state) {
         std::fs::write(&path, content).ok();
+    }
+}
+
+/// Reconnect the running core so config changes take effect. No-op when the
+/// core isn't running or there's no active server. Resolves the active
+/// interface from current state.
+async fn reconnect_active(ctx: &AppContext) {
+    if !ctx.core.is_running().await {
+        return;
+    }
+    let state = ctx.state.lock().await;
+    let Some(id) = state.active_server_id.clone() else { return };
+    let Some(server) = state.servers.iter().find(|s| s.id == id).cloned() else { return };
+    let tun_mode = state.settings.vpn_mode == "tun";
+    let rules = state.routing_rules.clone();
+    let dr = state.default_route.clone();
+    let active_iface = state.active_interface().cloned();
+    drop(state);
+    if let Err(e) = ctx.core.start(&server, tun_mode, &rules, &dr, active_iface.as_ref()).await {
+        log::error!("Failed to reconnect after config change: {}", e);
     }
 }
