@@ -89,7 +89,7 @@ https://raw.githubusercontent.com/frank-vpl/servers/refs/heads/main/irbox
 ### پیش‌نیازها
 - **Rust و Cargo** (نسخهٔ پایدار)
 - **Node.js و npm** (نسخهٔ ۱۸ به بالا)
-- **Tauri CLI v2** — `cargo install tauri-cli --version "^2"`
+- **Tauri CLI** — از وابستگیِ توسعهٔ پین‌شدهٔ `@tauri-apps/cli` تأمین می‌شود؛ دستور `npm install` (در پایین) آن را نصب می‌کند و با `npm run tauri` اجرا می‌شود. نیازی به `cargo install tauri-cli` جداگانه نیست — این کار نسخهٔ CLI را همراه با `@tauri-apps/api` قفل نگه می‌دارد.
 - **وابستگی‌های سکو** ([پیش‌نیازهای Tauri](https://v2.tauri.app/start/prerequisites/)):
   - **لینوکس:** `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`
   - **ویندوز:** Microsoft C++ Build Tools به‌همراه WebView2 (روی ویندوز ۱۱ از پیش نصب است)
@@ -125,15 +125,15 @@ https://raw.githubusercontent.com/frank-vpl/servers/refs/heads/main/irbox
 
 ```bash
 # اجرا در حالت توسعه (با بارگذاری مجدد خودکار)
-cargo tauri dev
+npm run tauri dev
 
 # ساخت نصاب‌های نسخهٔ نهایی برای سکوی فعلی
-cargo tauri build
+npm run tauri build
 ```
 
 ### نصب نسخه‌ای که ساختید
 
-دستور `cargo tauri build` بسته‌های آمادهٔ نصب را در `src-tauri/target/release/bundle/` می‌نویسد. بستهٔ مربوط به سکوی خود را مستقیماً از همان‌جا نصب کنید:
+دستور `npm run tauri build` بسته‌های آمادهٔ نصب را در `src-tauri/target/release/bundle/` می‌نویسد. بستهٔ مربوط به سکوی خود را مستقیماً از همان‌جا نصب کنید:
 
 - **لینوکس:**
   ```bash

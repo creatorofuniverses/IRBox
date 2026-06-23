@@ -64,9 +64,6 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2"
-
       - name: Download core executables (Linux/macOS)
         if: matrix.os != 'windows-latest'
         run: |
@@ -141,7 +138,7 @@ jobs:
         shell: pwsh
 
       - name: Build Tauri app
-        run: cargo tauri build --target ${{ matrix.target }}
+        run: npm run tauri build -- --target ${{ matrix.target }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

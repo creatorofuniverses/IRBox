@@ -89,7 +89,7 @@ For development or to build the installers yourself.
 ### Prerequisites
 - **Rust and Cargo** (stable)
 - **Node.js and npm** (Node 18+)
-- **Tauri CLI v2** — `cargo install tauri-cli --version "^2"`
+- **Tauri CLI** — comes from the pinned `@tauri-apps/cli` dev-dependency; `npm install` (below) provides it, and you run it via `npm run tauri`. No separate `cargo install tauri-cli` needed — this keeps the CLI version locked together with `@tauri-apps/api`.
 - **Platform dependencies** ([Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)):
   - **Linux:** `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`
   - **Windows:** Microsoft C++ Build Tools + WebView2 (preinstalled on Windows 11)
@@ -125,15 +125,15 @@ For development or to build the installers yourself.
 
 ```bash
 # Run in development (hot reload)
-cargo tauri dev
+npm run tauri dev
 
 # Build release installers for the current platform
-cargo tauri build
+npm run tauri build
 ```
 
 ### Install your build
 
-`cargo tauri build` writes ready-to-install packages to `src-tauri/target/release/bundle/`. Install the one for your platform directly from there:
+`npm run tauri build` writes ready-to-install packages to `src-tauri/target/release/bundle/`. Install the one for your platform directly from there:
 
 - **Linux:**
   ```bash
