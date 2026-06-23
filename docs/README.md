@@ -143,6 +143,13 @@ direct. This mode always uses the sing-box core (xray/custom cannot route into a
 bridge outbound). Removing or deactivating the active interface while connected
 stops the core.
 
+**Liveness indicator:** each interface card shows an up/down/unknown status
+dot based on the OS interface state (Linux/Android read
+`/sys/class/net/<iface>/operstate`; a present device that isn't explicitly
+`down` counts as up, since WireGuard/TUN devices report `unknown` while up).
+Other platforms show `unknown`. This is a presence/operstate check only — not
+an active reachability probe.
+
 ## 🌐 Supported Protocols
 
 ### Core Protocols

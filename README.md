@@ -73,6 +73,11 @@ rules route into the active interface and everything else goes direct. The
 status shows "Interface-only · <label>". Deactivating or deleting the active
 interface while live stops the tunnel.
 
+Each interface card shows a **live status dot** — green (up), red (down /
+not present), or grey (unknown) — refreshed every few seconds while the
+Interfaces page is open, so you can see at a glance whether the bound device
+exists and is up.
+
 ## 🎁 Gift: Free Xray / sing-box Configs
 
 As a small gift to the community, IRBox provides a **free public subscription** compatible with **Xray** and **sing-box** clients.
