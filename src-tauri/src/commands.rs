@@ -4,6 +4,7 @@ use tauri::State;
 use tokio::sync::Mutex;
 
 use crate::core::manager::CoreManager;
+use crate::core::iface_status;
 use crate::proxy::{link_parser, models::*, subscription};
 use crate::system::{hwid, proxy_setter};
 use crate::testing::ping;
@@ -709,6 +710,21 @@ pub async fn save_routing_rules(
 pub struct InterfacesResponse {
     pub interfaces: Vec<InterfaceConfig>,
     pub active_interface_id: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct InterfaceStatus {
+    pub id: String,
+    pub status: String,
+}
+
+#[tauri::command]
+pub async fn get_interface_statuses(ctx: State<'_, AppContext>) -> Result<Vec<InterfaceStatus>, String> {
+    let state = ctx.state.lock().await;
+    Ok(state.interfaces.iter().map(|i| InterfaceStatus {
+        id: i.id.clone(),
+        status: iface_status::interface_status(&i.interface).to_string(),
+    }).collect())
 }
 
 #[tauri::command]

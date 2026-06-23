@@ -167,6 +167,7 @@ pub fn run() {
             commands::save_interface,
             commands::delete_interface,
             commands::set_active_interface,
+            commands::get_interface_statuses,
             commands::get_onboarding_completed,
             commands::complete_onboarding,
             commands::is_admin,
