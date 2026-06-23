@@ -113,10 +113,16 @@ impl CoreManager {
         *self.http_port.lock().await
     }
 
-    pub async fn start(&self, server: &Server, tun_mode: bool, routing_rules: &[RoutingRule], default_route: &str, active_interface: Option<&InterfaceConfig>) -> Result<()> {
+    pub async fn start(&self, server: Option<&Server>, tun_mode: bool, routing_rules: &[RoutingRule], default_route: &str, active_interface: Option<&InterfaceConfig>) -> Result<()> {
         self.stop().await?;
 
-        let core_type = self.core_type.lock().await.clone();
+        // Interface-only mode (no server) always runs sing-box, regardless of the
+        // user's selected core — xray/custom can't route into a bridge outbound.
+        let core_type = if server.is_none() {
+            CoreType::SingBox
+        } else {
+            self.core_type.lock().await.clone()
+        };
         let socks_port = *self.socks_port.lock().await;
         let http_port = *self.http_port.lock().await;
 
@@ -133,7 +139,8 @@ impl CoreManager {
         }
         
         // For Custom protocol, merge the JSON config with necessary wrapper configuration
-        if server.protocol == Protocol::Custom {
+        if matches!(server, Some(s) if s.protocol == Protocol::Custom) {
+            let server = server.expect("custom path requires a server");
             if let Some(ref json_config) = server.json_config {
                 // Parse the custom JSON config
                 let mut custom_config: serde_json::Value = serde_json::from_str(json_config)
@@ -341,17 +348,23 @@ impl CoreManager {
         } else {
             let config = match core_type {
                 CoreType::SingBox => singbox::generate_config(server, socks_port, http_port, tun_mode, routing_rules, default_route, active_interface)?,
-                CoreType::Xray => xray::generate_config(server, socks_port, http_port, routing_rules, default_route)?,
+                CoreType::Xray => xray::generate_config(
+                    server.ok_or_else(|| anyhow!("xray core requires a proxy server"))?,
+                    socks_port, http_port, routing_rules, default_route,
+                )?,
             };
-            
+
             std::fs::write(&config_path, serde_json::to_string_pretty(&config)?)
                 .map_err(|e| anyhow!("Cannot write config to {}: {}", config_path.display(), e))?;
         }
 
+        let target = match server {
+            Some(s) => format!("'{}' ({}:{})", s.name, s.address, s.port),
+            None => "interface-only".to_string(),
+        };
         log::info!(
-            "Starting {:?}{} for '{}' ({}:{})",
-            core_type, if tun_mode { " [TUN]" } else { "" },
-            server.name, server.address, server.port
+            "Starting {:?}{} for {}",
+            core_type, if tun_mode { " [TUN]" } else { "" }, target
         );
 
         let bin_path = self.resolve_binary(&core_type).await?;

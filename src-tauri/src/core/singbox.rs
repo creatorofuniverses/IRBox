@@ -4,11 +4,16 @@ use serde_json::{json, Value};
 use crate::proxy::models::*;
 
 /// Generate a sing-box config for connecting to a single server
-pub fn generate_config(server: &Server, socks_port: u16, http_port: u16, tun_mode: bool, routing_rules: &[RoutingRule], default_route: &str, active_interface: Option<&InterfaceConfig>) -> Result<Value> {
-    let outbound = build_outbound(server)?;
-    
+pub fn generate_config(server: Option<&Server>, socks_port: u16, http_port: u16, tun_mode: bool, routing_rules: &[RoutingRule], default_route: &str, active_interface: Option<&InterfaceConfig>) -> Result<Value> {
+    // Proxy outbound only exists when a server is selected; interface-only mode omits it.
+    let outbound: Option<Value> = match server {
+        Some(s) => Some(build_outbound(s)?),
+        None => None,
+    };
+
     // Handle WireGuard endpoints separately
-    let endpoints = if server.protocol == Protocol::WireGuard {
+    let endpoints = if let Some(server) = server {
+        if server.protocol == Protocol::WireGuard {
         if let Some(ref wg_settings) = server.wireguard_settings {
             let mut wg_endpoint = json!({
                 "type": "wireguard",
@@ -75,6 +80,9 @@ pub fn generate_config(server: &Server, socks_port: u16, http_port: u16, tun_mod
         } else {
             None
         }
+        } else {
+            None
+        }
     } else {
         None
     };
@@ -113,6 +121,9 @@ pub fn generate_config(server: &Server, socks_port: u16, http_port: u16, tun_mod
         }));
     }
 
+    // In interface-only mode there is no "proxy" outbound for DNS to detour through.
+    let dns_detour = if server.is_some() { "proxy" } else { "direct" };
+
     // DNS config: TUN mode needs DoH + proper resolver chain to avoid loops
     // sing-box 1.12+ new DNS format: use type/server instead of address
     let dns = if tun_mode {
@@ -124,7 +135,7 @@ pub fn generate_config(server: &Server, socks_port: u16, http_port: u16, tun_mod
                     "server": "dns.google",
                     "server_port": 443,
                     "domain_resolver": "dns-direct",
-                    "detour": "proxy"
+                    "detour": dns_detour
                 },
                 {
                     "tag": "dns-direct",
@@ -204,23 +215,40 @@ pub fn generate_config(server: &Server, socks_port: u16, http_port: u16, tun_mod
                 route_rules.push(json!({ "domain_suffix": [domain], "action": "reject" }));
             }
             RuleAction::Proxy => {
-                route_rules.push(json!({ "domain_suffix": [domain], "outbound": "proxy" }));
+                // No proxy outbound in interface-only mode — fall through to direct.
+                let outbound = if server.is_some() { "proxy" } else { "direct" };
+                route_rules.push(json!({ "domain_suffix": [domain], "outbound": outbound }));
             }
             RuleAction::Bridge => {
-                // Routes into the active interface's bridge outbound; falls back
-                // to `proxy` when no interface is active.
-                let outbound = if active_interface.is_some() { "bridge" } else { "proxy" };
+                // Routes into the active interface's bridge outbound; without an active
+                // interface, falls back to proxy (or direct in interface-only mode).
+                let outbound = if active_interface.is_some() {
+                    "bridge"
+                } else if server.is_some() {
+                    "proxy"
+                } else {
+                    "direct"
+                };
                 route_rules.push(json!({ "domain_suffix": [domain], "outbound": outbound }));
             }
         }
     }
 
-    let final_route = if default_route == "direct" { "direct" } else { "proxy" };
+    // Interface-only mode (no server) always finals to direct — nothing to proxy into.
+    let final_route = if server.is_none() {
+        "direct"
+    } else if default_route == "direct" {
+        "direct"
+    } else {
+        "proxy"
+    };
 
     let mut outbounds = vec![
-        outbound,
         json!({ "type": "direct", "tag": "direct" }),
     ];
+    if let Some(out) = outbound {
+        outbounds.insert(0, out);
+    }
     if let Some(iface) = active_interface {
         let mut bridge_out = json!({
             "type": "direct",
@@ -295,14 +323,14 @@ mod tests {
 
     #[test]
     fn no_bridge_outbound_when_no_active_interface() {
-        let cfg = generate_config(&test_server(), 1080, 1081, false, &[], "proxy", None).unwrap();
+        let cfg = generate_config(Some(&test_server()), 1080, 1081, false, &[], "proxy", None).unwrap();
         assert!(!outbound_tags(&cfg).contains(&"bridge".to_string()));
     }
 
     #[test]
     fn bridge_outbound_emitted_with_bind_interface_and_mark() {
         let i = iface("awg0", Some(51820), vec![]);
-        let cfg = generate_config(&test_server(), 1080, 1081, false, &[], "proxy", Some(&i)).unwrap();
+        let cfg = generate_config(Some(&test_server()), 1080, 1081, false, &[], "proxy", Some(&i)).unwrap();
         let out = cfg["outbounds"].as_array().unwrap().iter()
             .find(|o| o["tag"] == "bridge").expect("bridge outbound present");
         assert_eq!(out["type"], "direct");
@@ -313,7 +341,7 @@ mod tests {
     #[test]
     fn bridge_outbound_omits_mark_when_unset() {
         let i = iface("awg0", None, vec![]);
-        let cfg = generate_config(&test_server(), 1080, 1081, false, &[], "proxy", Some(&i)).unwrap();
+        let cfg = generate_config(Some(&test_server()), 1080, 1081, false, &[], "proxy", Some(&i)).unwrap();
         let out = cfg["outbounds"].as_array().unwrap().iter()
             .find(|o| o["tag"] == "bridge").expect("bridge outbound present");
         assert!(out.get("routing_mark").is_none());
@@ -325,7 +353,7 @@ mod tests {
         let rules = vec![RoutingRule {
             id: "r".into(), domain: "example.com".into(), action: RuleAction::Bridge, enabled: true,
         }];
-        let cfg = generate_config(&test_server(), 1080, 1081, false, &rules, "proxy", Some(&i)).unwrap();
+        let cfg = generate_config(Some(&test_server()), 1080, 1081, false, &rules, "proxy", Some(&i)).unwrap();
         let route_rules = cfg["route"]["rules"].as_array().unwrap();
         let antiloop_idx = route_rules.iter().position(|r| r.get("ip_cidr").is_some()).unwrap();
         let user_idx = route_rules.iter().position(|r| r.get("domain_suffix").is_some()).unwrap();
@@ -335,7 +363,7 @@ mod tests {
     #[test]
     fn no_antiloop_rule_when_endpoints_empty() {
         let i = iface("awg0", None, vec![]);
-        let cfg = generate_config(&test_server(), 1080, 1081, false, &[], "proxy", Some(&i)).unwrap();
+        let cfg = generate_config(Some(&test_server()), 1080, 1081, false, &[], "proxy", Some(&i)).unwrap();
         let route_rules = cfg["route"]["rules"].as_array().unwrap();
         assert!(!route_rules.iter().any(|r| r.get("ip_cidr").is_some() && r["outbound"] == "direct"));
     }
@@ -346,7 +374,7 @@ mod tests {
         let rules = vec![RoutingRule {
             id: "r".into(), domain: "example.com".into(), action: RuleAction::Bridge, enabled: true,
         }];
-        let cfg = generate_config(&test_server(), 1080, 1081, false, &rules, "proxy", Some(&i)).unwrap();
+        let cfg = generate_config(Some(&test_server()), 1080, 1081, false, &rules, "proxy", Some(&i)).unwrap();
         let rule = cfg["route"]["rules"].as_array().unwrap().iter()
             .find(|r| r.get("domain_suffix").is_some()).unwrap();
         assert_eq!(rule["outbound"], "bridge");
@@ -357,10 +385,48 @@ mod tests {
         let rules = vec![RoutingRule {
             id: "r".into(), domain: "example.com".into(), action: RuleAction::Bridge, enabled: true,
         }];
-        let cfg = generate_config(&test_server(), 1080, 1081, false, &rules, "proxy", None).unwrap();
+        let cfg = generate_config(Some(&test_server()), 1080, 1081, false, &rules, "proxy", None).unwrap();
         let rule = cfg["route"]["rules"].as_array().unwrap().iter()
             .find(|r| r.get("domain_suffix").is_some()).unwrap();
         assert_eq!(rule["outbound"], "proxy");
+    }
+
+    #[test]
+    fn interface_only_omits_proxy_outbound() {
+        let i = iface("awg0", None, vec![]);
+        let cfg = generate_config(None, 1080, 1081, false, &[], "proxy", Some(&i)).unwrap();
+        let tags = outbound_tags(&cfg);
+        assert!(!tags.contains(&"proxy".to_string()));
+        assert!(tags.contains(&"direct".to_string()));
+        assert!(tags.contains(&"bridge".to_string()));
+    }
+
+    #[test]
+    fn interface_only_forces_direct_final_route() {
+        let i = iface("awg0", None, vec![]);
+        // default_route "proxy" must be overridden to "direct" when there's no server.
+        let cfg = generate_config(None, 1080, 1081, false, &[], "proxy", Some(&i)).unwrap();
+        assert_eq!(cfg["route"]["final"], "direct");
+    }
+
+    #[test]
+    fn interface_only_proxy_rule_degrades_to_direct() {
+        let i = iface("awg0", None, vec![]);
+        let rules = vec![RoutingRule { id: "r".into(), domain: "example.com".into(), action: RuleAction::Proxy, enabled: true }];
+        let cfg = generate_config(None, 1080, 1081, false, &rules, "proxy", Some(&i)).unwrap();
+        let rule = cfg["route"]["rules"].as_array().unwrap().iter()
+            .find(|r| r.get("domain_suffix").is_some()).unwrap();
+        assert_eq!(rule["outbound"], "direct");
+    }
+
+    #[test]
+    fn interface_only_bridge_rule_routes_to_bridge() {
+        let i = iface("awg0", None, vec![]);
+        let rules = vec![RoutingRule { id: "r".into(), domain: "example.com".into(), action: RuleAction::Bridge, enabled: true }];
+        let cfg = generate_config(None, 1080, 1081, false, &rules, "proxy", Some(&i)).unwrap();
+        let rule = cfg["route"]["rules"].as_array().unwrap().iter()
+            .find(|r| r.get("domain_suffix").is_some()).unwrap();
+        assert_eq!(rule["outbound"], "bridge");
     }
 }
 

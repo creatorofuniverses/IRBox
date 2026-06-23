@@ -156,7 +156,7 @@ pub async fn connect(ctx: State<'_, AppContext>, server_id: String) -> Result<St
     let active_iface = state.active_interface().cloned();
 
     ctx.core
-        .start(&server, tun_mode, &routing_rules, &default_route, active_iface.as_ref())
+        .start(Some(&server), tun_mode, &routing_rules, &default_route, active_iface.as_ref())
         .await
         .map_err(|e| format!("Failed to start core: {}", e))?;
 
@@ -291,7 +291,7 @@ pub async fn set_core_type(ctx: State<'_, AppContext>, core: String) -> Result<S
                 let dr = state.default_route.clone();
                 let active_iface = state.active_interface().cloned();
                 drop(state);
-                ctx.core.start(&s, tun_mode, &rules, &dr, active_iface.as_ref()).await.map_err(|e| e.to_string())?;
+                ctx.core.start(Some(&s), tun_mode, &rules, &dr, active_iface.as_ref()).await.map_err(|e| e.to_string())?;
             }
         }
     }
@@ -547,7 +547,7 @@ pub async fn save_settings(ctx: State<'_, AppContext>, settings: Settings) -> Re
                     let active_iface = state.active_interface().cloned();
                     drop(state);
                     // Reconnect with new ports
-                    if let Err(e) = ctx.core.start(&s, tun_mode, &rules, &dr, active_iface.as_ref()).await {
+                    if let Err(e) = ctx.core.start(Some(&s), tun_mode, &rules, &dr, active_iface.as_ref()).await {
                         log::error!("Failed to reconnect with new ports: {}", e);
                     }
                     // Update system proxy with new HTTP port (only in proxy mode)
@@ -902,7 +902,7 @@ async fn reconnect_active(ctx: &AppContext) {
     let dr = state.default_route.clone();
     let active_iface = state.active_interface().cloned();
     drop(state);
-    if let Err(e) = ctx.core.start(&server, tun_mode, &rules, &dr, active_iface.as_ref()).await {
+    if let Err(e) = ctx.core.start(Some(&server), tun_mode, &rules, &dr, active_iface.as_ref()).await {
         log::error!("Failed to reconnect after config change: {}", e);
     }
 }
