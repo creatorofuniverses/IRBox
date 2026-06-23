@@ -134,6 +134,15 @@ const translations = {
   "routing.presets": { en: "Quick Presets", ru: "Быстрые шаблоны" },
   "routing.presetAds": { en: "Block Ads", ru: "Блокировка рекламы" },
   "routing.saved": { en: "Routing rules saved", ru: "Правила маршрутизации сохранены" },
+  "routing.bridge": { en: "Interface" },
+  "routing.bridgeSettings": { en: "Custom interface routing" },
+  "routing.bridgeInterface": { en: "Interface name" },
+  "routing.bridgeInterfacePlaceholder": { en: "e.g. awg0" },
+  "routing.bridgeEndpoints": { en: "Endpoint IPs to exclude" },
+  "routing.bridgeEndpointsPlaceholder": { en: "comma-separated, e.g. 192.0.2.1, 198.51.100.7" },
+  "routing.bridgeMark": { en: "Firewall mark (fwmark)" },
+  "routing.bridgeMarkPlaceholder": { en: "optional, e.g. 51820" },
+  "routing.bridgeHelp": { en: "Route the \"Interface\" action into an externally-managed network interface (e.g. a WireGuard/AmneziaWG tunnel). IRBox does not create the interface." },
 
   // Onboarding
   "onboarding.welcome": { en: "Welcome to IRBox!", ru: "Добро пожаловать в IRBox!" },
