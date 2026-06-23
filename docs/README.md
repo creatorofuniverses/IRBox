@@ -115,29 +115,26 @@ hysteria2://password@server:port/?upmbps=100&downmbps=200&obfs=salamander&sni=ex
 
 ---
 
-## 🔀 Custom Interface Routing
+## Custom Interface Routing
 
-IRBox can route selected domains into a **network interface that you bring up and manage yourself** — for example a WireGuard/AmneziaWG tunnel created with `table = off`. IRBox does not create or destroy the interface; it only directs matching traffic into it via the **sing-box** core. (This feature is sing-box only; with the Xray core the **Interface** action falls back to **proxy**.)
+IRBox can route selected domains into an externally-managed interface (e.g. an
+AmneziaWG tunnel). IRBox does not manage the interface lifecycle.
 
-### Prerequisites
+**OS-side setup (Linux):** bring the tunnel up with `table = off` so the kernel
+doesn't install a catch-all route, and (optionally) set a `fwmark` so IRBox can
+tag the bridge egress. The interface must already exist and be up.
 
-- An interface you manage **outside** IRBox (e.g. `awg0`, `wg0`). On Linux, configure it with `table = off` and its own firewall mark (`fwmark`) so the OS does not automatically route all traffic into it.
-- The **sing-box** core selected in IRBox.
+**In IRBox:**
+- **Interfaces page** — add one or more named interfaces and mark one **active**.
+- **Routing page** — give rules the **Interface** action to route into the
+  active interface.
 
-### Setup
+**Anti-loop endpoints:** in TUN mode, list the tunnel server's IP/CIDRs as
+endpoints so that traffic to the tunnel server itself stays `direct` and doesn't
+loop back into the tunnel.
 
-1. Open the **Routing** page and locate **Custom interface routing**.
-2. Fill in:
-   - **Interface name** — the interface to bind to, e.g. `awg0`.
-   - **Endpoint IPs to exclude** — the tunnel server IP(s), comma-separated. In **TUN mode** these are pinned to a direct route so the tunnel's own handshake is not captured back into sing-box (which would otherwise create a routing loop).
-   - **Firewall mark (fwmark)** — optional `SO_MARK` to tag the routed traffic (Linux), matching your interface's mark.
-3. Add a routing rule (or edit one) and set its action to **Interface**. Matching domains now egress through your interface. If no interface name is configured, the action safely falls back to **proxy**.
-
-### How it works
-
-IRBox emits a sing-box `direct` outbound bound to your interface (`bind_interface`, plus optional `routing_mark`) and routes the matching domain rules to it. The endpoint-exclusion rule is inserted ahead of your rules so the tunnel can still reach its own server.
-
-> **Platform support:** solid on **Linux**. Binding works on Windows/macOS too, but bringing up and maintaining a `table = off` interface there is your responsibility (best-effort).
+Only the **active** interface gets a bridge outbound; switching the active
+interface (or editing it while connected) reconnects the core to apply it.
 
 ## 🌐 Supported Protocols
 
