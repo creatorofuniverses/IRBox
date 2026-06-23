@@ -153,9 +153,10 @@ pub async fn connect(ctx: State<'_, AppContext>, server_id: String) -> Result<St
     let tun_mode = state.settings.vpn_mode == "tun";
     let routing_rules = state.routing_rules.clone();
     let default_route = state.default_route.clone();
+    let bridge = state.bridge.clone();
 
     ctx.core
-        .start(&server, tun_mode, &routing_rules, &default_route)
+        .start(&server, tun_mode, &routing_rules, &default_route, &bridge)
         .await
         .map_err(|e| format!("Failed to start core: {}", e))?;
 
@@ -288,8 +289,9 @@ pub async fn set_core_type(ctx: State<'_, AppContext>, core: String) -> Result<S
                 let tun_mode = state.settings.vpn_mode == "tun";
                 let rules = state.routing_rules.clone();
                 let dr = state.default_route.clone();
+                let bridge = state.bridge.clone();
                 drop(state);
-                ctx.core.start(&s, tun_mode, &rules, &dr).await.map_err(|e| e.to_string())?;
+                ctx.core.start(&s, tun_mode, &rules, &dr, &bridge).await.map_err(|e| e.to_string())?;
             }
         }
     }
@@ -542,9 +544,10 @@ pub async fn save_settings(ctx: State<'_, AppContext>, settings: Settings) -> Re
                     let tun_mode = state.settings.vpn_mode == "tun";
                     let rules = state.routing_rules.clone();
                     let dr = state.default_route.clone();
+                    let bridge = state.bridge.clone();
                     drop(state);
                     // Reconnect with new ports
-                    if let Err(e) = ctx.core.start(&s, tun_mode, &rules, &dr).await {
+                    if let Err(e) = ctx.core.start(&s, tun_mode, &rules, &dr, &bridge).await {
                         log::error!("Failed to reconnect with new ports: {}", e);
                     }
                     // Update system proxy with new HTTP port (only in proxy mode)
@@ -693,8 +696,9 @@ pub async fn save_routing_rules(
                 let tun_mode = state.settings.vpn_mode == "tun";
                 let rules = state.routing_rules.clone();
                 let dr = state.default_route.clone();
+                let bridge = state.bridge.clone();
                 drop(state);
-                if let Err(e) = ctx.core.start(&s, tun_mode, &rules, &dr).await {
+                if let Err(e) = ctx.core.start(&s, tun_mode, &rules, &dr, &bridge).await {
                     log::error!("Failed to reconnect with new routing rules: {}", e);
                 }
             }
