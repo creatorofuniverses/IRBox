@@ -298,10 +298,10 @@ impl CoreManager {
                                 RuleAction::Direct => json!({ "domain_suffix": [domain], "outbound": "direct" }),
                                 RuleAction::Block => json!({ "domain_suffix": [domain], "action": "reject" }),
                                 RuleAction::Proxy => json!({ "domain_suffix": [domain], "outbound": "proxy" }),
-                                RuleAction::Bridge => {
-                                    let outbound = if bridge.interface.is_some() { "bridge" } else { "proxy" };
-                                    json!({ "domain_suffix": [domain], "outbound": outbound })
-                                }
+                                // Custom-protocol configs own their outbounds; the bridge outbound is
+                                // not injected here (unlike singbox::generate_config), so degrade to
+                                // proxy to avoid routing to a non-existent outbound (would fail to start).
+                                RuleAction::Bridge => json!({ "domain_suffix": [domain], "outbound": "proxy" }),
                             };
                             route_rules.push(rule_action);
                         }

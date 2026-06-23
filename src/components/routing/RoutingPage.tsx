@@ -197,30 +197,33 @@ export function RoutingPage() {
       </div>
 
       {/* Bridge / Custom interface routing settings */}
-      <section className="bridge-settings">
-        <h3>{t("routing.bridgeSettings")}</h3>
-        <p className="hint">{t("routing.bridgeHelp")}</p>
-        <label>
-          {t("routing.bridgeInterface")}
+      <div className="settings-section">
+        <div className="settings-label">{t("routing.bridgeSettings")}</div>
+        <div className="vpn-mode-desc">{t("routing.bridgeHelp")}</div>
+        <div className="form-group">
+          <label className="form-label">{t("routing.bridgeInterface")}</label>
           <input
+            className="form-input"
             type="text"
             placeholder={t("routing.bridgeInterfacePlaceholder")}
             value={state.bridge.interface ?? ""}
             onChange={(e) => setBridge({ interface: e.target.value.trim() || null })}
           />
-        </label>
-        <label>
-          {t("routing.bridgeEndpoints")}
+        </div>
+        <div className="form-group">
+          <label className="form-label">{t("routing.bridgeEndpoints")}</label>
           <input
+            className="form-input"
             type="text"
             placeholder={t("routing.bridgeEndpointsPlaceholder")}
             value={state.bridge.endpoints.join(", ")}
             onChange={(e) => setBridge({ endpoints: parseEndpoints(e.target.value) })}
           />
-        </label>
-        <label>
-          {t("routing.bridgeMark")}
+        </div>
+        <div className="form-group">
+          <label className="form-label">{t("routing.bridgeMark")}</label>
           <input
+            className="form-input"
             type="number"
             placeholder={t("routing.bridgeMarkPlaceholder")}
             value={state.bridge.routing_mark ?? ""}
@@ -228,8 +231,8 @@ export function RoutingPage() {
               setBridge({ routing_mark: e.target.value === "" ? null : Number(e.target.value) })
             }
           />
-        </label>
-      </section>
+        </div>
+      </div>
 
       {/* Add rule form */}
       <div className="settings-section">
