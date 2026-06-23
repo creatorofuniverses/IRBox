@@ -147,6 +147,89 @@ implementation plan decides, but the on-wire outbound tag `"bridge"` can stay.
 
 ---
 
+## Additional scope (from real-world testing of v1.1.0)
+
+These came out of testing the shipped feature against a live interface. They
+are part of this redesign.
+
+### A. Documentation (required deliverable)
+
+The shipped v1.1.0 documented routing *into* an interface in `README.md`
+(`## 🔀 Custom Interface Routing`) and `README_FA.md`, but **not** in the
+documentation hub `docs/README.md`, which has no mention of custom interfaces at
+all. This redesign must:
+
+- Rewrite the README / README_FA "Custom Interface Routing" how-to for the new
+  multi-interface flow (add an interface on the **Interfaces** page → mark one
+  **active** → set rules to the **Interface** action → enable). Persian
+  mirrored.
+- Add a "Custom Interface Routing" section to `docs/README.md` (the hub),
+  covering the same workflow plus the OS-side `table = off` / fwmark setup and
+  the anti-loop endpoints rationale.
+
+### B. Enable with an active interface even when no proxy server is connected
+
+**Problem:** today the core (sing-box) only starts when the user connects to a
+**proxy server** via the main Connect button (`api.connect(selectedServerId)` in
+`StatusPanel.tsx`). Routing rules — including the `Interface` action — only take
+effect while the core runs, so a user who *only* wants to route selected domains
+into a custom interface (no proxy) currently can't: routing "works only if proxy
+enabled."
+
+**Goal:** let the user "go live" with just an **active interface** and no proxy
+server selected.
+
+**Design sketch:**
+- The core can start in an **interface-only mode**: sing-box runs with **no
+  proxy outbound**, default route `direct`, the `bridge` outbound bound to the
+  active interface, and `Interface`-action rules routing into it (everything
+  else stays direct). Anti-loop endpoints still apply in TUN mode.
+- The Connect button's enabled-state becomes: enabled if **a proxy server is
+  selected OR an active interface exists**. The status panel reflects which mode
+  is live (proxy / interface-only / both).
+- `connect` command path must accept "no server, active interface" and build the
+  appropriate config (today it assumes a server). This is the main backend
+  change for this item.
+
+**Open question:** confirm default route in interface-only mode is `direct`
+(recommended — non-matching traffic untouched) vs `block`.
+
+### C. Interface liveness check + status indicator
+
+Mirror how proxy connection status is surfaced, for the active interface:
+
+- A **liveness check** that the bound interface actually exists / is up
+  (Linux: presence via `ip link show <iface>` or netlink; Windows/macOS:
+  best-effort via the OS interface list).
+- Surface it in the UI: a status indicator on the interface card (and/or status
+  panel) — up / down / unknown — refreshed periodically while active, like the
+  proxy indicator.
+- If the active interface goes down while connected, show it clearly (and
+  consider a toast), since `Interface` rules would then fall through / fail.
+
+---
+
+## Related improvement: editable routing rules (separable)
+
+> **Independent of the interface redesign** — included here at the user's
+> request, but it can ship as its own PR/plan. Touches only the Routing page +
+> rule persistence, not interfaces.
+
+**Problem:** routing rules can't be edited in place. To change a rule's domain
+or action you must delete it and add a new one — not user-friendly.
+
+**Goal:** edit an existing rule's domain and action without delete + re-add.
+
+**Design sketch:**
+- Add an **Edit** affordance per rule row in `RoutingPage.tsx` that opens the
+  add-rule form pre-filled (or makes the row's fields editable inline).
+- Dispatch an `UPDATE_RULE` action (by rule `id`) in `AppContext`; persist via
+  the existing `save_routing_rules` (rules are already stored as a list, so the
+  backend needs no new command — just save the mutated list).
+- Keep the existing add / remove / toggle behavior.
+
+---
+
 ## Testing approach
 
 - **Rust:** unit tests on `generate_config` — active interface emits the
@@ -158,6 +241,15 @@ implementation plan decides, but the on-wire outbound tag `"bridge"` can stay.
 - **Frontend:** `npm run build` (no unit runner); manual checks — add several
   interfaces, switch active, confirm routing follows the active one, confirm the
   Routing page no longer shows interface fields.
+- **Interface-only mode (B):** `generate_config` test for "no proxy server +
+  active interface" → no proxy outbound, default route `direct`, bridge outbound
+  present, `Interface` rules → `bridge`. Manual: enable with only an interface
+  active (no server selected) and confirm matching domains egress via it.
+- **Liveness (C):** unit-test the interface-presence check against a known-up
+  and a nonexistent interface name; manual: bring the interface down while
+  connected and confirm the indicator reflects it.
+- **Editable rules:** manual — edit a rule's domain and action in place and
+  confirm it persists and re-applies without a delete + re-add.
 
 ## Open questions / future
 
@@ -169,3 +261,10 @@ implementation plan decides, but the on-wire outbound tag `"bridge"` can stay.
   format in the modal.
 - **Active indicator on connect:** whether the Home/status UI should surface
   which interface is active when any `Interface` rules exist.
+- **Interface-only default route (B):** confirm `direct` (recommended) vs
+  `block` for non-matching traffic when no proxy server is connected.
+- **Liveness depth (C):** mere existence/up check vs. an active reachability
+  probe to the interface's endpoint(s); and the poll interval.
+- **Editable rules scope (separable):** ship independently of the interface
+  redesign? It only touches the Routing page + rule persistence and could land
+  in its own small PR/plan first.
