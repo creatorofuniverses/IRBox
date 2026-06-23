@@ -13,7 +13,7 @@ import { setLang, Lang } from "../i18n/translations";
 
 // ── State ──────────────────────────────────────
 
-export type Page = "home" | "subscriptions" | "settings" | "logs" | "stats" | "routing";
+export type Page = "home" | "subscriptions" | "interfaces" | "settings" | "logs" | "stats" | "routing";
 
 export interface AppState {
   page: Page;

@@ -6,6 +6,7 @@ import { StatusPanel } from "./components/home/StatusPanel";
 import { TrafficPanel } from "./components/home/TrafficPanel";
 import { ServerList } from "./components/home/ServerList";
 import { SubList } from "./components/subscriptions/SubList";
+import { InterfacesPage } from "./components/interfaces/InterfacesPage";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { LogsPage } from "./components/logs/LogsPage";
 import { StatsPage } from "./components/stats/StatsPage";
@@ -126,6 +127,8 @@ function AppContent() {
         );
       case "subscriptions":
         return <SubList />;
+      case "interfaces":
+        return <InterfacesPage />;
       case "settings":
         return <SettingsPage />;
       case "routing":

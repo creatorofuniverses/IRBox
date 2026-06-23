@@ -135,6 +135,29 @@ export function RouteIcon({ size, color, className }: IconProps = defaults) {
   );
 }
 
+export function NetworkIcon({ size, color, className }: IconProps = defaults) {
+  const s = size ?? 20;
+  const c = color ?? "currentColor";
+  return (
+    <svg
+      width={s}
+      height={s}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={c}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect x="9" y="2" width="6" height="6" rx="1" />
+      <rect x="2" y="16" width="6" height="6" rx="1" />
+      <rect x="16" y="16" width="6" height="6" rx="1" />
+      <path d="M12 8v4M12 12H5v4M12 12h7v4" />
+    </svg>
+  );
+}
+
 export function PowerIcon({ size, color, className }: IconProps = defaults) {
   const s = size ?? 20;
   const c = color ?? "currentColor";
