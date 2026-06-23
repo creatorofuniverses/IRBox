@@ -30,8 +30,9 @@ Designed for privacy-conscious users, IRBox offers multi-protocol support, advan
 
 ### Advanced Management
 - **Subscription Support** - Import and auto-update subscription URLs
-- **Routing Rules** - Domain-based rules (proxy/direct/block) with presets for ad blocking and regional bypass
+- **Routing Rules** - Domain-based rules (proxy/direct/block/interface) with presets for ad blocking and regional bypass
 - **Split Tunneling** - Choose default route: proxy all traffic or selected domains
+- **Custom Interface Routing** - Route selected domains into an externally-managed network interface (e.g. a WireGuard/AmneziaWG tunnel)
 
 ### Connection Modes
 - **System Proxy** - HTTP proxy for system-wide access
@@ -44,6 +45,21 @@ Designed for privacy-conscious users, IRBox offers multi-protocol support, advan
 - **Auto-select Best Server** - Intelligent server selection
 - **Themes** - 2 color themes (Dark, Light)
 - **Styles** - Default, Minimal
+
+## 🔀 Custom Interface Routing
+
+IRBox can route selected domains **into a network interface that you bring up and manage yourself** — for example a WireGuard/AmneziaWG tunnel created with `table = off`. IRBox does **not** create or tear down the interface; it only directs matching traffic into it via sing-box. This is sing-box only (with the Xray core, the `interface` action falls back to `proxy`).
+
+**How to use it:**
+
+1. Bring up your interface outside IRBox (e.g. `awg0` / `wg0`). On Linux, configure it with `table = off` and its own firewall mark so the OS does not route everything into it automatically.
+2. In IRBox, open the **Routing** page and find the **Custom interface routing** section:
+   - **Interface name** — the interface to bind to, e.g. `awg0`.
+   - **Endpoint IPs to exclude** — the tunnel server IP(s), comma-separated. In TUN mode these are kept on a direct route so the tunnel's own handshake is not captured back into sing-box (which would otherwise create a routing loop).
+   - **Firewall mark (fwmark)** — optional `SO_MARK` to tag the bridged traffic (Linux), matching your interface's mark.
+3. Add a routing rule (or edit an existing one) and set its action to **Interface**. Matching domains are now routed into your interface. If no interface name is set, the action safely falls back to `proxy`.
+
+> **Platform note:** solid on **Linux**; binding works on Windows/macOS too, but managing a `table = off` interface there is your responsibility (best-effort).
 
 ## 🎁 Gift: Free Xray / sing-box Configs
 
