@@ -66,6 +66,13 @@ or tears down the interface — it only routes into it.
    follows your default route. If a rule uses **Interface** but nothing is
    active, the Routing page shows a hint and the rule falls back to proxy.
 
+**Interface-only mode (no proxy server):** you don't need a proxy server to use
+an interface. With an interface marked **active** and **no server selected**,
+press **Connect** — IRBox runs in interface-only mode: matching `Interface`
+rules route into the active interface and everything else goes direct. The
+status shows "Interface-only · <label>". Deactivating or deleting the active
+interface while live stops the tunnel.
+
 ## 🎁 Gift: Free Xray / sing-box Configs
 
 As a small gift to the community, IRBox provides a **free public subscription** compatible with **Xray** and **sing-box** clients.
