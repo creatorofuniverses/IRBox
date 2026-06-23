@@ -303,6 +303,9 @@ pub enum RuleAction {
     Proxy,
     Direct,
     Block,
+    /// Route matching traffic into an externally-managed interface (e.g. an
+    /// AmneziaWG tunnel brought up with `table = off`). sing-box only.
+    Bridge,
 }
 
 /// A user-defined routing rule (domain → action)

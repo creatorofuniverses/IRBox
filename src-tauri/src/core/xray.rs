@@ -326,8 +326,10 @@ fn build_xray_routing_rules(routing_rules: &[RoutingRule], default_route: &str) 
     for rule in routing_rules.iter().filter(|r| r.enabled) {
         let tag = match rule.action {
             RuleAction::Direct => "direct",
-            RuleAction::Block => "block",
-            RuleAction::Proxy => "proxy",
+            RuleAction::Block  => "block",
+            RuleAction::Proxy  => "proxy",
+            // Bridge (external-interface routing) is sing-box only; degrade to proxy.
+            RuleAction::Bridge => "proxy",
         };
         rules.push(json!({
             "type": "field",
