@@ -112,7 +112,7 @@ export const api = {
   removeServer: (serverId: string) =>
     invoke<void>("remove_server", { serverId }),
 
-  connect: (serverId: string) =>
+  connect: (serverId: string | null) =>
     invoke<StatusResponse>("connect", { serverId }),
 
   disconnect: () => invoke<StatusResponse>("disconnect"),

@@ -14,6 +14,7 @@ const translations = {
   "status.connected": { en: "Connected" },
   "status.disconnected": { en: "Disconnected" },
   "status.connecting": { en: "Connecting..." },
+  "status.interfaceOnly": { en: "Interface-only" },
 
   // Server list
   "servers.search": { en: "Search servers...", ru: "Поиск серверов..." },
@@ -36,6 +37,7 @@ const translations = {
   },
   "servers.cancel": { en: "Cancel", ru: "Отмена" },
   "servers.selectFirst": { en: "Select a server first", ru: "Сначала выберите сервер" },
+  "servers.selectFirstOrInterface": { en: "Select a server or activate an interface first" },
   "servers.bestServer": { en: "Best server", ru: "Лучший сервер" },
   "servers.remove": { en: "Remove", ru: "Удалить" },
   "servers.sortName": { en: "By name", ru: "По имени" },
